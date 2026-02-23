@@ -57,9 +57,9 @@ export class DeathKnightUnholy extends Behavior {
   burstCooldowns() {
     return new bt.Selector(
       this.useRacials(),
+      this.useTrinkets(),
       spell.cast("Army of the Dead", ret => true),
       spell.cast("Dark Transformation", ret => true),
-      this.useTrinkets(),
     );
   }
 
@@ -68,20 +68,24 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Soul Reaper", on => me.target, ret => me.target && (
         me.targetUnit.pctHealth < 35 || this.getDTRemaining() <= 5000
       )),
-      spell.cast("Putrefy", on => me.target, ret =>
-        me.target && me.targetUnit.pctHealth >= 35 && spell.getCharges("Putrefy") >= 1
-      ),
     );
   }
 
   mainRotation() {
     return new bt.Selector(
+      spell.cast("Putrefy", on => me.target, ret =>
+        me.target && me.targetUnit.pctHealth >= 35 &&
+        spell.getCharges("Putrefy") >= 1 && this.shouldCastOutbreak()
+      ),
       spell.cast("Outbreak", on => me.target, ret => this.shouldCastOutbreak()),
-      spell.cast("Festering Scythe", on => me.target, ret => this.isFesteringScytheNeeded()),
+      spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
       spell.cast("Epidemic", ret => this.isAoE() && this.shouldHighPrioritySpend()),
       spell.cast("Death Coil", on => me.target, ret => !this.isAoE() && this.shouldHighPrioritySpend()),
-      spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() === 0),
+      spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() < 3),
       spell.cast("Scourge Strike", on => me.target, ret => this.getLesserGhoulStacks() >= 1),
+      spell.cast("Putrefy", on => me.target, ret =>
+        me.target && me.targetUnit.pctHealth >= 35 && spell.getCharges("Putrefy") >= 2
+      ),
       spell.cast("Epidemic", ret => this.isAoE()),
       spell.cast("Death Coil", on => me.target, ret => true),
     );
@@ -134,21 +138,6 @@ export class DeathKnightUnholy extends Behavior {
            !me.targetUnit.hasAuraByMe(auras.dreadPlague);
   }
 
-  isFesteringScytheNeeded() {
-    if (!me.hasAura(auras.festeringScythe)) return false;
-
-    if (this.isAoE()) {
-      const enemies = me.getEnemies(12);
-      return enemies.some(enemy => {
-        const scythe = enemy.getAuraByMe(auras.festeringScythe);
-        return !scythe || scythe.remaining < 3000;
-      });
-    }
-
-    if (!me.target) return false;
-    const scythe = me.targetUnit.getAuraByMe(auras.festeringScythe);
-    return !scythe || scythe.remaining < 3000;
-  }
 
   hasCooldownsReady() {
     return Combat.burstToggle && (
