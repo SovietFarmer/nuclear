@@ -1,5 +1,4 @@
 import perfMgr from "../Debug/PerfMgr";
-import spell from "@/Core/Spell";
 
 /**
  * @type {wow.CGActivePlayer}
@@ -9,7 +8,6 @@ export let me = null;
 class ObjectManager {
   constructor() {
     this.reset();
-    this.aurasLogged = false; // Flag to log auras only once
   }
 
   /**
@@ -95,21 +93,6 @@ class ObjectManager {
         // obj number 10 and 11 appearing, whut this? Help me Tovarish Ian.
         //console.warn(`Unknown object type: ${base.type}`);
         return null;
-    }
-  }
-  /**
-   * Debug method to log all current auras for the player
-   * Call this method when you need to debug aura IDs
-   */
-  logPlayerAuras() {
-    if (me && me.auras && me.auras.length > 0) {
-      console.info('=== PLAYER AURAS DEBUG ===');
-      me.auras.forEach(aura => {
-        console.info(`Aura ID: ${aura.spellId}, Name: ${aura.name || 'Unknown'}, Stacks: ${aura.stacks || 1}`);
-      });
-      console.info('=== END AURAS DEBUG ===');
-    } else {
-      console.info('No player or no auras found');
     }
   }
 }
