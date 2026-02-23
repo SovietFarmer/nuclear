@@ -1,5 +1,5 @@
 import nuclear from '@/nuclear';
-import objMgr from '../Core/ObjectManager';
+import objMgr, { me } from '../Core/ObjectManager';
 import Settings from "../Core/Settings";
 import { renderBehaviorTree } from './BehaviorTreeDebug';
 import PerfMgr from './PerfMgr';
@@ -76,6 +76,11 @@ class DebugWindow {
         if (nuclear.behaviorRoot) {
           renderBehaviorTree(nuclear.behaviorRoot);
         }
+        imgui.endTabItem();
+      }
+
+      if (imgui.beginTabItem("Dump")) {
+        this.renderDump();
         imgui.endTabItem();
       }
     }
@@ -347,6 +352,54 @@ class DebugWindow {
         }
       });
       imgui.endTable();
+    }
+  }
+  renderDump() {
+    imgui.text("One-shot dumps to console log:");
+    imgui.separator();
+
+    if (imgui.button("Dump Player Auras")) {
+      if (me && me.auras && me.auras.length > 0) {
+        console.info('=== PLAYER AURAS ===');
+        me.auras.forEach(aura => {
+          console.info(`Aura ID: ${aura.spellId}, Name: ${aura.name || 'Unknown'}, Stacks: ${aura.stacks || 1}, Remaining: ${aura.remaining}ms`);
+        });
+        console.info('=== END PLAYER AURAS ===');
+      } else {
+        console.info('No player or no auras found');
+      }
+    }
+
+    if (imgui.button("Dump Target Auras")) {
+      const target = me ? me.targetUnit : null;
+      if (target && target.auras && target.auras.length > 0) {
+        console.info(`=== TARGET AURAS (${target.unsafeName}) ===`);
+        target.auras.forEach(aura => {
+          console.info(`Aura ID: ${aura.spellId}, Name: ${aura.name || 'Unknown'}, Stacks: ${aura.stacks || 1}, Remaining: ${aura.remaining}ms`);
+        });
+        console.info('=== END TARGET AURAS ===');
+      } else {
+        console.info('No target or no auras found');
+      }
+    }
+
+    if (imgui.button("Dump Target Data")) {
+      const target = me ? me.targetUnit : null;
+      if (target) {
+        console.info(`=== TARGET DATA (${target.unsafeName}) ===`);
+        Object.getOwnPropertyNames(Object.getPrototypeOf(target)).forEach(key => {
+          try {
+            const val = target[key];
+            if (typeof val === 'function') return;
+            console.info(`${key}: ${JSON.stringify(val, (k, v) => typeof v === 'bigint' ? '0x' + v.toString(16) : v)}`);
+          } catch (e) {
+            console.info(`${key}: [error reading]`);
+          }
+        });
+        console.info('=== END TARGET DATA ===');
+      } else {
+        console.info('No target found');
+      }
     }
   }
 }
