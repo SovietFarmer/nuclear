@@ -581,7 +581,7 @@ class Spell extends wow.EventListener {
     const cooldown = this.getCooldown(spellNameOrId);
     if (!cooldown) {
       // if it's undefined somehow - just let it be on cooldown.
-      console.error('Spell getCooldown(' + this.unsafeName + ') is null or undefined');
+      console.error('Spell getCooldown(' + spellNameOrId + ') is null or undefined');
       return true;
     }
     return cooldown.timeleft > 0;

@@ -372,14 +372,19 @@ class DebugWindow {
 
     if (imgui.button("Dump Target Auras")) {
       const target = me ? me.targetUnit : null;
-      if (target && target.auras && target.auras.length > 0) {
+      if (target) {
         console.info(`=== TARGET AURAS (${target.unsafeName}) ===`);
-        target.auras.forEach(aura => {
-          console.info(`Aura ID: ${aura.spellId}, Name: ${aura.name || 'Unknown'}, Stacks: ${aura.stacks || 1}, Remaining: ${aura.remaining}ms`);
-        });
+        console.info(`type: ${target.type} | isPlayer: ${target.isPlayer()} | klass: ${target.klass} | creatureType: ${target.creatureType} | summonedBy: ${target.summonedBy}`);
+        if (target.auras && target.auras.length > 0) {
+          target.auras.forEach(aura => {
+            console.info(`Aura ID: ${aura.spellId}, Name: ${aura.name || 'Unknown'}, Stacks: ${aura.stacks || 1}, Remaining: ${aura.remaining}ms`);
+          });
+        } else {
+          console.info('No auras found');
+        }
         console.info('=== END TARGET AURAS ===');
       } else {
-        console.info('No target or no auras found');
+        console.info('No target found');
       }
     }
 
