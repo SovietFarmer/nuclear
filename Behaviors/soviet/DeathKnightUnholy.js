@@ -78,6 +78,9 @@ export class DeathKnightUnholy extends Behavior {
         spell.getCharges("Putrefy") >= 1 && this.shouldCastOutbreak()
       ),
       spell.cast("Outbreak", on => me.target, ret => this.shouldCastOutbreak()),
+      spell.cast("Scourge Strike", on => me.target, ret =>
+        this.getLesserGhoulStacks() >= 1 && this.hasEnemiesMissingPlagues()
+      ),
       spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
       spell.cast("Epidemic", ret => this.isAoE() && this.shouldHighPrioritySpend()),
       spell.cast("Death Coil", on => me.target, ret => !this.isAoE() && this.shouldHighPrioritySpend()),
@@ -115,7 +118,15 @@ export class DeathKnightUnholy extends Behavior {
   }
 
   isAoE() {
-    return me.getEnemies(12).length >= 4;
+    return me.getEnemies(12).length >= 3;
+  }
+
+  hasEnemiesMissingPlagues() {
+    const enemies = me.getEnemies(12);
+    if (enemies.length < 2) return false;
+    return enemies.some(enemy =>
+      !enemy.hasAuraByMe(auras.virulentPlague) || !enemy.hasAuraByMe(auras.dreadPlague)
+    );
   }
 
   getLesserGhoulStacks() {
