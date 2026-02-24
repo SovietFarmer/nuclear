@@ -1,0 +1,47 @@
+# Cursor Rules Configuration File
+
+This is a WoW rotation tool. The SDK is one level up under the sdk folder.
+wow.d.ts is the main SDK file. Core/Spell.js is critical — load it into context almost always.
+Core directory has common utilities, Data has references, Enums are self-explanatory.
+DRTracker covers PvP diminishing returns. Debug/DebugWindow.js has one-shot dump buttons.
+
+# Behavior Tree Gotchas
+- bt.Selector evaluates children top-to-bottom; first Success stops the whole branch.
+  A spell higher in the list WILL starve everything below it of GCDs if it keeps succeeding.
+  Always consider: "if this condition is true every tick, does anything below ever run?"
+- Decorator conditions (ret =>) are evaluated every tick. Anything gated by a Decorator
+  that returns false will skip its ENTIRE subtree — including all children inside it.
+- spell.cast() fails silently if the spell can't actually cast (no resources, out of range, etc.)
+  even when ret => returns true. Don't assume ret => true means it always fires.
+
+# SDK Pitfalls
+- spell.cast() callback option ({ callback: () => {} }) is dead code — never invoked.
+  Use spell.getTimeSinceLastCast("SpellName") for tracking recent casts instead.
+- getTimeSinceLastCast() does NOT work for channels — SPELL_CAST_SUCCESS only fires on
+  full channel completion. Use me.currentCast === SPELL_ID (numeric) to detect active casts.
+- me.currentChannel may not report all channeled spells. Always verify in-game.
+- spell.isOnCooldown() on untalented spells causes log spam every tick. Guard with
+  spell.isSpellKnown() before calling isOnCooldown()/getCooldown() on optional talents.
+
+# Rotation Design Patterns
+- Split cooldowns into burstCooldowns() (gated by burst toggle) and rotationalCooldowns().
+- Charge-based abilities at multiple priorities need careful ordering — anti-cap checks
+  BELOW core rotational abilities or they eat GCDs.
+- AoE plague/dot checks on "any enemy" cause spam; check current target only for single-target
+  applicators and trust AoE spread mechanics.
+- Healer CDs: the game's aura cache is ~500ms. Multiple CDs in a Selector can stack on
+  consecutive ticks. Use getTimeSinceLastCast() with a 2-3s window to prevent overlap.
+  Add a low-HP override so CDs can still stack when someone is dying.
+
+# Aura / Spell ID Rules
+- Auras use numeric spell IDs. Spell casts use string names.
+- Pet buffs must be checked on Pet.current, not on me.
+- New expansion aura IDs are unknown until verified. Use 0 as placeholder + TODO comment.
+- isPlayer() checks type === 6 || 7. If pets leak into player lists, verify actual type
+  values via DebugWindow dump — expansion patches can shift ObjectTypeID enums.
+
+# Debugging
+- console.info() inside a Decorator condition for per-tick logging.
+- Clean up debug logs immediately after confirming the fix.
+- If a spell "never fires," trace the Selector top-to-bottom for priority ordering bugs.
+- For one-shot debugging, use Debug/DebugWindow.js dump buttons.

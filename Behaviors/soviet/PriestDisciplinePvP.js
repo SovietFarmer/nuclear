@@ -22,10 +22,8 @@ const auras = {
   powerWordShield: 17,
   atonement: 194384,
   surgeOfLight: 114255,
-  premonitionPiety: 428930,
-  premonitionSolace: 428934,
-  premonitionInsight: 428933,
   powerInfusion: 10060,
+  archangel: 81700,
 };
 
 export class PriestDisciplinePvP extends Behavior {
@@ -41,6 +39,8 @@ export class PriestDisciplinePvP extends Behavior {
   lastPainSuppressionTime = 0;
   lastVoidShiftTime = 0;
   lastBarrierTime = 0;
+  lastMajorHealCDTime = 0;
+  _lastUPTime = 0;
 
   // Enemy CC tracking for predictive Fade
   enemyCCTracker = new Map(); // Track enemy GUID -> { spellId: timestamp }
@@ -90,7 +90,7 @@ export class PriestDisciplinePvP extends Behavior {
       common.waitForNotWaitingForArenaToStart(),
       common.waitForNotSitting(),
       common.waitForNotMounted(),
-      this.waitForNotJustCastPenitence(),
+      this.waitForNotChanneling(),
       // Stop casting for CC counter - this needs to be outside GCD check
       new bt.Decorator(
         () => this.shouldStopCastingForCCCounter(),
@@ -135,10 +135,15 @@ export class PriestDisciplinePvP extends Behavior {
     );
   }
 
-  waitForNotJustCastPenitence() {
+  waitForNotChanneling() {
     return new bt.Action(() => {
-      let lastCastPenitence = spell.getTimeSinceLastCast("Ultimate Penitence");
-      if (lastCastPenitence < 400) {
+      if (me.currentCast === 421453) {
+        this._lastUPTime = wow.frameTime;
+      }
+      if (me.isCastingOrChanneling || me.currentCast || me.currentChannel) {
+        return bt.Status.Success;
+      }
+      if (this._lastUPTime && (wow.frameTime - this._lastUPTime) < 3500) {
         return bt.Status.Success;
       }
       return bt.Status.Failure;
@@ -566,7 +571,7 @@ export class PriestDisciplinePvP extends Behavior {
   applyAtonement() {
     return new bt.Selector(
       spell.cast("Power Word: Shield", on => this.findFriendWithoutAtonement(), ret => this.findFriendWithoutAtonement() !== undefined),
-      spell.cast("Renew", on => this.findFriendWithoutAtonement(), ret => this.findFriendWithoutAtonement() !== undefined)
+      spell.cast("Plea", on => this.findFriendWithoutAtonement(), ret => this.findFriendWithoutAtonement() !== undefined)
     );
   }
 
@@ -577,7 +582,7 @@ export class PriestDisciplinePvP extends Behavior {
         return bt.Status.Failure; // Proceed to next child
       }),
       spell.cast("Power Word: Life", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 50),
-      spell.cast("Desperate Prayer", on => me, ret => me.effectiveHealthPercent < 40),
+      spell.cast("Desperate Prayer", on => me, ret => me.effectiveHealthPercent < 40 && !this.usedMajorHealCDRecently(me)),
       spell.cast("Pain Suppression", on => this.healTarget, ret => this.shouldUsePainSuppression(this.healTarget), {
         callback: () => {
           this.updateDefensiveCooldownTime("Pain Suppression");
@@ -591,10 +596,14 @@ export class PriestDisciplinePvP extends Behavior {
         }
       }),
       spell.cast("Mass Dispel", on => this.findMassDispelTarget(), ret => this.findMassDispelTarget() !== undefined),
-      spell.cast("Premonition", on => me, ret => this.shouldCastPremonition(this.healTarget)),
-      spell.cast("Evangelism", on => me, ret => me.inCombat() && (
-        (this.getAtonementCount() > 3 && this.minAtonementDuration() < 4000)
-        || (this.healTarget && this.healTarget.hasAura(auras.atonement) && this.healTarget.effectiveHealthPercent < 40))
+      spell.cast("Evangelism", on => me, ret => me.inCombat()
+        && !this.usedMajorHealCDRecently(this.healTarget)
+        && ((this.healTarget && this.healTarget.effectiveHealthPercent < 55)
+        || (this.getAverageTeamHealth() < 70))
+      ),
+      spell.cast("Power Word: Radiance", on => this.healTarget, ret =>
+        this.healTarget && spell.getTimeSinceLastCast("Evangelism") < 6000
+          && spell.getCharges("Power Word: Radiance") > 0
       ),
       this.noFacingSpellsImportant(),
       spell.cast("Power Word: Barrier", on => this.healTarget, ret => this.shouldUseBarrier(this.healTarget), {
@@ -604,14 +613,18 @@ export class PriestDisciplinePvP extends Behavior {
         }
       }),
       spell.cast("Power Word: Shield", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 89 && !this.hasShield(this.healTarget)),
-      spell.cast("Power Word: Radiance", on => this.healTarget, ret => this.shouldCastRadiance(this.healTarget, 2)),
+      spell.cast("Plea", on => this.healTarget, ret =>
+        this.healTarget?.effectiveHealthPercent < 85 && !this.hasAtonement(this.healTarget)
+      ),
+      spell.cast("Power Word: Radiance", on => this.healTarget, ret => !this.isLowMana() && this.shouldCastRadiance(this.healTarget, 2)),
       spell.cast("Flash Heal", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 85 && me.hasAura(auras.surgeOfLight)),
       spell.dispel("Purify", true, DispelPriority.High, true, WoWDispelType.Magic),
       spell.dispel("Dispel Magic", false, DispelPriority.High, true, WoWDispelType.Magic),
-      spell.cast("Penance", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 69),
-      spell.cast("Power Word: Radiance", on => this.healTarget, ret => this.shouldCastRadiance(this.healTarget, 1)),
+      spell.cast("Penance", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 72),
+      spell.cast("Power Word: Radiance", on => this.healTarget, ret => !this.isLowMana() && this.healTarget?.effectiveHealthPercent < 50 && spell.getCharges("Power Word: Radiance") === 1),
       spell.cast("Penance", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 79),
-      spell.cast("Flash Heal", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 55),
+      spell.cast("Plea", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 75),
+      spell.cast("Flash Heal", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 55 && !this.isLowMana()),
       spell.dispel("Purify", true, DispelPriority.Medium, true, WoWDispelType.Magic),
       spell.dispel("Dispel Magic", false, DispelPriority.Medium, true, WoWDispelType.Magic),
       this.noFacingSpells()
@@ -639,21 +652,17 @@ export class PriestDisciplinePvP extends Behavior {
       spell.cast("Mind Control", on => this.findMindControlDPSTarget(), ret =>
         Settings.UseMindControlDPS === true && this.findMindControlDPSTarget() !== undefined
       ),
-      spell.cast("Shadowfiend", on => me.targetUnit, ret =>
-        me.targetUnit && me.pctPowerByType(PowerType.Mana) < 90
-      ),
       spell.cast("Shadow Word: Pain", on => this.findShadowWordPainTarget(), ret => this.findShadowWordPainTarget() !== undefined)
     );
   }
 
   targetedDamageRotation() {
     return new bt.Selector(
-      // Spells that require target and/or facing
       spell.cast("Mindgames", on => me.targetUnit, ret => me.targetUnit?.effectiveHealthPercent < 50),
       spell.cast("Penance", on => me.targetUnit, ret => me.hasAura(auras.powerOfTheDarkSide)),
-      spell.cast("Shadowfiend", on => me.targetUnit, ret => me.pctPowerByType(PowerType.Mana) < 90),
       spell.cast("Mind Blast", on => me.targetUnit, ret => true),
-      spell.cast("Smite", on => me.targetUnit, ret => me.pctPower > 30),
+      spell.cast("Penance", on => me.targetUnit, ret => spell.getCharges("Penance") >= 2),
+      spell.cast("Smite", on => me.targetUnit, ret => me.pctPowerByType(PowerType.Mana) > 30),
     );
   }
 
@@ -675,16 +684,6 @@ export class PriestDisciplinePvP extends Behavior {
       }
     }
     return undefined;
-  }
-
-  shouldCastPremonition(target) {
-    if (!target) {
-      return false;
-    }
-    if (me.hasAura(auras.premonitionInsight) || me.hasAura(auras.premonitionSolace) || me.hasAura(auras.premonitionPiety)) {
-      return false;
-    }
-    return target.effectiveHealthPercent < 50 || target.timeToDeath() < 3;
   }
 
   hasAtonement(target) {
@@ -724,8 +723,8 @@ export class PriestDisciplinePvP extends Behavior {
   updateDefensiveCooldownTime(spellName) {
     const currentTime = wow.frameTime;
     this.lastDefensiveCooldownTime = currentTime;
+    this.lastMajorHealCDTime = currentTime;
 
-    // Track individual spell times for additional logic if needed
     switch (spellName) {
       case "Pain Suppression":
         this.lastPainSuppressionTime = currentTime;
@@ -741,10 +740,22 @@ export class PriestDisciplinePvP extends Behavior {
     console.log(`[Priest] Used defensive cooldown: ${spellName} - Next defensive available in ${Settings.DefensiveCooldownInterval}s`);
   }
 
+  usedMajorHealCDRecently(target) {
+    if (target && target.effectiveHealthPercent <= 15) return false;
+
+    const window = 2500;
+    if (spell.getTimeSinceLastCast("Pain Suppression") < window) return true;
+    if (spell.getTimeSinceLastCast("Desperate Prayer") < window) return true;
+    if (spell.getTimeSinceLastCast("Evangelism") < window) return true;
+    if (spell.isSpellKnown("Power Word: Barrier") && spell.getTimeSinceLastCast("Power Word: Barrier") < window) return true;
+    if (spell.isSpellKnown("Void Shift") && spell.getTimeSinceLastCast("Void Shift") < window) return true;
+    return false;
+  }
+
   shouldUsePainSuppression(target) {
     if (!target) return false;
+    if (this.usedMajorHealCDRecently(target)) return false;
 
-    // Check basic conditions first
     if (target.hasAura("Ice Block") || target.hasAura("Divine Shield")) {
       return false;
     }
@@ -775,13 +786,13 @@ export class PriestDisciplinePvP extends Behavior {
 
   shouldUseVoidShift(target) {
     if (!target) return false;
+    if (!spell.isSpellKnown("Void Shift")) return false;
+    if (this.usedMajorHealCDRecently(target)) return false;
 
-    // Check basic conditions
     if (target.hasAura("Ice Block") || target.hasAura("Divine Shield")) {
       return false;
     }
 
-    // Check if spell is on cooldown
     if (spell.isOnCooldown("Void Shift")) {
       return false;
     }
@@ -807,13 +818,13 @@ export class PriestDisciplinePvP extends Behavior {
 
   shouldUseBarrier(target) {
     if (!target) return false;
+    if (!spell.isSpellKnown("Power Word: Barrier")) return false;
+    if (this.usedMajorHealCDRecently(target)) return false;
 
-    // Check basic conditions
     if (target.hasAura("Ice Block") || target.hasAura("Divine Shield")) {
       return false;
     }
 
-    // Check if spell is on cooldown
     if (spell.isOnCooldown("Power Word: Barrier")) {
       return false;
     }
@@ -881,6 +892,24 @@ export class PriestDisciplinePvP extends Behavior {
     return minDuration === Infinity ? 0 : minDuration;
   }
 
+  getAverageTeamHealth() {
+    const friends = me.getPlayerFriends(40);
+    if (friends.length === 0) return 100;
+    let total = 0;
+    let count = 0;
+    for (const friend of friends) {
+      if (me.withinLineOfSight(friend) && !friend.deadOrGhost) {
+        total += friend.effectiveHealthPercent;
+        count++;
+      }
+    }
+    return count > 0 ? total / count : 100;
+  }
+
+  isLowMana() {
+    return me.pctPowerByType(PowerType.Mana) < 40;
+  }
+
   findShadowWordPainTarget() {
     // Only search for targets when in combat
     if (!me.inCombat()) {
@@ -901,7 +930,8 @@ export class PriestDisciplinePvP extends Behavior {
     // Find any enemy without Shadow Word: Pain
     const enemies = me.getPlayerEnemies(40);
     for (const enemy of enemies) {
-      if (me.withinLineOfSight(enemy) &&
+      if (enemy.isPlayer() &&
+        me.withinLineOfSight(enemy) &&
         !this.hasShadowWordPain(enemy) &&
         !pvpHelpers.hasImmunity(enemy)) {
         return enemy;
@@ -1054,7 +1084,7 @@ export class PriestDisciplinePvP extends Behavior {
   }
 
   shouldUseVoidTendrils() {
-    // Check cooldown first
+    if (!spell.isSpellKnown("Void Tendrils")) return false;
     if (spell.isOnCooldown("Void Tendrils")) {
       return false;
     }
