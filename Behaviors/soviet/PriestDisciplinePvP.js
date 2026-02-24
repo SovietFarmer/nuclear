@@ -90,7 +90,7 @@ export class PriestDisciplinePvP extends Behavior {
       common.waitForNotWaitingForArenaToStart(),
       common.waitForNotSitting(),
       common.waitForNotMounted(),
-      this.waitForNotChanneling(),
+      this.waitForNotJustCastPenitence(),
       // Stop casting for CC counter - this needs to be outside GCD check
       new bt.Decorator(
         () => this.shouldStopCastingForCCCounter(),
@@ -135,15 +135,10 @@ export class PriestDisciplinePvP extends Behavior {
     );
   }
 
-  waitForNotChanneling() {
+  waitForNotJustCastPenitence() {
     return new bt.Action(() => {
-      if (me.currentCast === 421453) {
-        this._lastUPTime = wow.frameTime;
-      }
-      if (me.isCastingOrChanneling || me.currentCast || me.currentChannel) {
-        return bt.Status.Success;
-      }
-      if (this._lastUPTime && (wow.frameTime - this._lastUPTime) < 3500) {
+      let lastCastPenitence = spell.getTimeSinceLastCast("Ultimate Penitence");
+      if (lastCastPenitence < 400) {
         return bt.Status.Success;
       }
       return bt.Status.Failure;
