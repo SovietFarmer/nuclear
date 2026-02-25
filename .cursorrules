@@ -5,6 +5,14 @@ wow.d.ts is the main SDK file. Core/Spell.js is critical — load it into contex
 Core directory has common utilities, Data has references, Enums are self-explanatory.
 DRTracker covers PvP diminishing returns. Debug/DebugWindow.js has one-shot dump buttons.
 
+# Extensions Folder — Check It
+The Extensions/ folder contains JS files that patch SDK prototypes at runtime
+(e.g. CGUnit, CGActivePlayer, CGObject, Guid, Vector3, AuraData, Party, PartyMember, CGItem).
+These add helpers like hasAura, isFacing, getEnemies, timeToDeath, etc. that don't exist in
+the base SDK. Matching .d.ts files provide the type declarations. Before writing or modifying
+a rotation, load the relevant Extension JS files (not just the .d.ts interfaces) into context
+so you know what methods are actually available and how they work under the hood.
+
 # Behavior Tree Gotchas
 - bt.Selector evaluates children top-to-bottom; first Success stops the whole branch.
   A spell higher in the list WILL starve everything below it of GCDs if it keeps succeeding.
