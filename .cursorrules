@@ -33,6 +33,10 @@ so you know what methods are actually available and how they work under the hood
 
 # Rotation Design Patterns
 - Split cooldowns into burstCooldowns() (gated by burst toggle) and rotationalCooldowns().
+- Burst toggle uses combat.burstToggle (from defaultCombatTargeting). Gate burstCooldowns()
+  with a hasCooldownsReady() method that checks combat.burstToggle && any CD is off cooldown.
+  Wrap in bt.Decorator(ret => this.hasCooldownsReady(), this.burstCooldowns()). Never use a
+  custom Settings checkbox for burst — always use the global toggle.
 - Charge-based abilities at multiple priorities need careful ordering — anti-cap checks
   BELOW core rotational abilities or they eat GCDs.
 - AoE plague/dot checks on "any enemy" cause spam; check current target only for single-target
