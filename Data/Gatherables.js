@@ -352,7 +352,10 @@ const treasures = {
   469858: "treasure", // Shiny Trash Can
 
   // TWW 11.2
-  516444: "treasure" //Ethereal Pocket Storage
+  516444: "treasure", // Ethereal Pocket Storage
+
+  // Midnight 12.0
+  584752: "treasure", // Mislaid curiosity
 };
 
 export default { herb: herbs, ore: ores, treasure: treasures };

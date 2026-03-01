@@ -18,6 +18,12 @@ const auras = {
   lesserGhoul: 1254252,
   dreadPlague: 1240996,
   darkTransformation: 1233448,
+  forbiddenKnowledge: 1242223,
+};
+
+const spells = {
+  necroticCoil: 1242174,
+  graveyard: 383269,
 };
 
 export class DeathKnightUnholy extends Behavior {
@@ -47,7 +53,10 @@ export class DeathKnightUnholy extends Behavior {
             ret => this.hasCooldownsReady(),
             this.burstCooldowns()
           ),
-          this.rotationalCooldowns(),
+          new bt.Decorator(
+            ret => me.hasAura(auras.forbiddenKnowledge),
+            this.forbiddenKnowledgeRotation()
+          ),
           this.mainRotation()
         )
       )
@@ -63,34 +72,31 @@ export class DeathKnightUnholy extends Behavior {
     );
   }
 
-  rotationalCooldowns() {
+  mainRotation() {
     return new bt.Selector(
-      spell.cast("Soul Reaper", on => me.target, ret => me.target && (
-        me.targetUnit.pctHealth < 35 || this.getDTRemaining() <= 5000
-      )),
+      spell.cast("Outbreak", on => me.target, ret => this.shouldCastOutbreak()),
+      spell.cast("Putrefy", on => me.target, ret => this.shouldPutrefy2Charges()),
+      spell.cast("Soul Reaper", on => me.target, ret => !!me.target),
+      spell.cast("Putrefy", on => me.target, ret => this.isAoE() && this.canPutrefy()),
+      spell.cast("Putrefy", on => me.target, ret => !this.isAoE() && this.canPutrefy() && this.getDTCooldownRemaining() >= 15000),
+      spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
+      spell.cast("Epidemic", ret => this.isAoE()),
+      spell.cast("Death Coil", on => me.target, ret => !this.isAoE() && this.shouldHighPrioritySpend()),
+      spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() === 0),
+      spell.cast("Scourge Strike", on => me.target, ret => this.getLesserGhoulStacks() >= 1),
+      spell.cast("Death Coil", on => me.target, ret => true),
     );
   }
 
-  mainRotation() {
+  forbiddenKnowledgeRotation() {
     return new bt.Selector(
-      spell.cast("Putrefy", on => me.target, ret =>
-        me.target && me.targetUnit.pctHealth >= 35 &&
-        spell.getCharges("Putrefy") >= 1 && this.shouldCastOutbreak()
-      ),
-      spell.cast("Outbreak", on => me.target, ret => this.shouldCastOutbreak()),
-      spell.cast("Scourge Strike", on => me.target, ret =>
-        this.getLesserGhoulStacks() >= 1 && this.hasEnemiesMissingPlagues()
-      ),
+      spell.cast("Putrefy", on => me.target, ret => this.shouldPutrefy2Charges()),
+      spell.cast("Putrefy", on => me.target, ret => this.isAoE() && this.canPutrefy()),
       spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
-      spell.cast("Epidemic", ret => this.isAoE() && this.shouldHighPrioritySpend()),
-      spell.cast("Death Coil", on => me.target, ret => !this.isAoE() && this.shouldHighPrioritySpend()),
-      spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() < 3),
+      spell.cast("Graveyard", ret => this.isAoE()),
+      spell.cast("Necrotic Coil", on => me.target, ret => !this.isAoE()),
+      spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() === 0),
       spell.cast("Scourge Strike", on => me.target, ret => this.getLesserGhoulStacks() >= 1),
-      spell.cast("Putrefy", on => me.target, ret =>
-        me.target && me.targetUnit.pctHealth >= 35 && spell.getCharges("Putrefy") >= 2
-      ),
-      spell.cast("Epidemic", ret => this.isAoE()),
-      spell.cast("Death Coil", on => me.target, ret => true),
     );
   }
 
@@ -102,7 +108,6 @@ export class DeathKnightUnholy extends Behavior {
 
   useTrinkets() {
     return new bt.Selector(
-      common.useEquippedItemByName("Cursed Stone Idol"),
     );
   }
 
@@ -121,14 +126,6 @@ export class DeathKnightUnholy extends Behavior {
     return me.getEnemies(12).length >= 3;
   }
 
-  hasEnemiesMissingPlagues() {
-    const enemies = me.getEnemies(12);
-    if (enemies.length < 2) return false;
-    return enemies.some(enemy =>
-      !enemy.hasAuraByMe(auras.virulentPlague) || !enemy.hasAuraByMe(auras.dreadPlague)
-    );
-  }
-
   getLesserGhoulStacks() {
     return me.getAuraStacks(auras.lesserGhoul);
   }
@@ -139,16 +136,27 @@ export class DeathKnightUnholy extends Behavior {
     return dt ? dt.remaining : 0;
   }
 
+  getDTCooldownRemaining() {
+    const cd = spell.getCooldown("Dark Transformation");
+    return cd ? cd.timeleft : 0;
+  }
+
+  canPutrefy() {
+    return me.target && me.targetUnit.pctHealth >= 35 && spell.getCharges("Putrefy") >= 1;
+  }
+
+  shouldPutrefy2Charges() {
+    return me.target && me.targetUnit.pctHealth >= 35 && spell.getCharges("Putrefy") >= 2;
+  }
+
   shouldHighPrioritySpend() {
     return me.hasAura(auras.suddenDoom) || me.power >= 80;
   }
 
   shouldCastOutbreak() {
     if (!me.target) return false;
-    return !me.targetUnit.hasAuraByMe(auras.virulentPlague) ||
-           !me.targetUnit.hasAuraByMe(auras.dreadPlague);
+    return !me.targetUnit.hasAuraByMe(auras.virulentPlague);
   }
-
 
   hasCooldownsReady() {
     return Combat.burstToggle && (

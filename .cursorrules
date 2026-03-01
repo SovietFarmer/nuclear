@@ -21,6 +21,15 @@ so you know what methods are actually available and how they work under the hood
   that returns false will skip its ENTIRE subtree — including all children inside it.
 - spell.cast() fails silently if the spell can't actually cast (no resources, out of range, etc.)
   even when ret => returns true. Don't assume ret => true means it always fires.
+- spell.cast()'s first arg (spell name/ID) is fixed at tree construction time — build() runs
+  once. For talent-dependent spell choices, use separate spell.cast() entries with ret =>
+  conditions. Do NOT use a ternary in the first arg — it won't re-evaluate on later ticks.
+- spell.cast() accepts variadic functions after the spell name. A function returning
+  CGUnit/Guid sets the target; returning false/null/undefined fails the sequence (condition).
+  Pattern: spell.cast("Name", on => target, ret => condition).
+- Off-GCD abilities (interrupts, Spiritwalker's Grace, etc.) go BEFORE the
+  !spell.isGlobalCooldown() Decorator. The GCD Decorator skips its entire subtree during GCD,
+  which blocks off-GCD spells if they're inside it.
 
 # SDK Pitfalls
 - spell.cast() callback option ({ callback: () => {} }) is dead code — never invoked.
@@ -46,11 +55,20 @@ so you know what methods are actually available and how they work under the hood
   Add a low-HP override so CDs can still stack when someone is dying.
 
 # Aura / Spell ID Rules
-- Auras use numeric spell IDs. Spell casts use string names.
+- hasAura(), getAura(), getAuraByMe() etc. accept both numeric IDs and string names.
+  Prefer numeric IDs defined in a const auras = {} block at the top of the rotation file.
+  Use string names only as fallback for unknown/new expansion aura IDs.
+- Spell casts always use string names: spell.cast("Spell Name", ...).
 - Pet buffs must be checked on Pet.current, not on me.
-- New expansion aura IDs are unknown until verified. Use 0 as placeholder + TODO comment.
+- New expansion aura IDs are unknown until verified. Use string name as fallback
+  (e.g. me.hasAura("Tempest")) — do NOT use 0 as placeholder, it can match unexpectedly.
 - isPlayer() checks type === 6 || 7. If pets leak into player lists, verify actual type
   values via DebugWindow dump — expansion patches can shift ObjectTypeID enums.
+- me.power returns the spec's primary resource (Maelstrom, Runic Power, etc.) directly.
+  Use powerByType() only when you need a secondary resource.
+- Aura .remaining is in milliseconds. Use getAuraByMe() for debuffs you applied.
+- combat.targets (from defaultCombatTargeting) is the enemy list; .length for count,
+  combat.bestTarget for highest-priority target.
 
 # Debugging
 - console.info() inside a Decorator condition for per-tick logging.
