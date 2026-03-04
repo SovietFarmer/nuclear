@@ -48,7 +48,7 @@ export class DeathKnightUnholy extends Behavior {
         ret => !spell.isGlobalCooldown(),
         new bt.Selector(
           spell.cast("Death Strike", ret => me.pctHealth < 95 && me.hasAura(auras.darkSuccor)),
-          spell.cast("Death Strike", ret => me.pctHealth < 45 && me.power > 55),
+          spell.cast("Death Strike", ret => me.pctHealth < 45 && me.power > 35),
           new bt.Decorator(
             ret => this.hasCooldownsReady(),
             this.burstCooldowns()
@@ -80,11 +80,11 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Putrefy", on => me.target, ret => this.isAoE() && this.canPutrefy()),
       spell.cast("Putrefy", on => me.target, ret => !this.isAoE() && this.canPutrefy() && this.getDTCooldownRemaining() >= 15000),
       spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
-      spell.cast("Epidemic", ret => this.isAoE()),
+      spell.cast("Epidemic", ret => this.isAoE() && me.power >= 40),
       spell.cast("Death Coil", on => me.target, ret => !this.isAoE() && this.shouldHighPrioritySpend()),
       spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() === 0),
       spell.cast("Scourge Strike", on => me.target, ret => this.getLesserGhoulStacks() >= 1),
-      spell.cast("Death Coil", on => me.target, ret => true),
+      spell.cast("Death Coil", on => me.target, ret => me.power >= 40),
     );
   }
 
@@ -93,8 +93,8 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Putrefy", on => me.target, ret => this.shouldPutrefy2Charges()),
       spell.cast("Putrefy", on => me.target, ret => this.isAoE() && this.canPutrefy()),
       spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
-      spell.cast("Graveyard", ret => this.isAoE()),
-      spell.cast("Necrotic Coil", on => me.target, ret => !this.isAoE()),
+      spell.cast("Graveyard", ret => this.isAoE() && me.power >= 40),
+      spell.cast("Necrotic Coil", on => me.target, ret => !this.isAoE() && me.power >= 40),
       spell.cast("Festering Strike", on => me.target, ret => this.getLesserGhoulStacks() === 0),
       spell.cast("Scourge Strike", on => me.target, ret => this.getLesserGhoulStacks() >= 1),
     );
@@ -146,7 +146,7 @@ export class DeathKnightUnholy extends Behavior {
   }
 
   shouldPutrefy2Charges() {
-    return me.target && me.targetUnit.pctHealth >= 35 && spell.getCharges("Putrefy") >= 2;
+    return me.target && spell.getCharges("Putrefy") >= 2;
   }
 
   shouldHighPrioritySpend() {

@@ -207,13 +207,17 @@ class Spell extends wow.EventListener {
 
       new bt.Action(() => {
         this._lastSpell = spellNameOrId;
-        const defaultSpellId = wow.SpellBook.singleButtonAssistantSpellId;
-        let defaultInfo = 'none';
-        if (defaultSpellId > 0) {
-          const defaultSpell = new wow.Spell(defaultSpellId);
-          defaultInfo = `${defaultSpellId} (${defaultSpell.name || 'unknown'})`;
+        if (Settings.SpellDebugCompare) {
+          const defaultSpellId = wow.SpellBook.singleButtonAssistantSpellId;
+          let defaultInfo = 'none';
+          if (defaultSpellId > 0) {
+            const defaultSpell = new wow.Spell(defaultSpellId);
+            defaultInfo = `${defaultSpellId} (${defaultSpell.name || 'unknown'})`;
+          }
+          console.info(`Cast ${spellNameOrId} on ${this._currentTarget?.unsafeName} — default rotation says: ${defaultInfo}`);
+        } else {
+          console.info(`Cast ${spellNameOrId} on ${this._currentTarget?.unsafeName}`);
         }
-        console.info(`Cast ${spellNameOrId} on ${this._currentTarget?.unsafeName} — default rotation says: ${defaultInfo}`);
         return bt.Status.Success;
       })
     );
