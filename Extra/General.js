@@ -19,6 +19,7 @@ class General {
     // Spell Cast Settings
     { type: "slider", uid: "SpellCastDelay", text: "Spell Cast Delay (ms)", min: 0, max: 1000, default: 0 },
     { type: "slider", uid: "SpellQueueExpirationTimer", text: "Spell Queue Expiration Timer (ms)", min: 2000, max: 5000, default: 3000 },
+    { type: "checkbox", uid: "SpellDebugCompare", text: "Log Default Rotation Comparison", default: false },
     // Cache Settings
     { type: "slider", uid: "AuraCacheTimeMs", text: "Aura Cache Time (ms)", min: 1, max: 1000, default: 500 },
     // Interrupt Settings
@@ -32,12 +33,12 @@ class General {
 
   static renderOptions(renderFunction) {
     renderFunction([
-      { header: "Combat Behavior", options: this.options.slice(0, 5) }, // Only include the 5 combat behavior settings
-      { header: "Spell Casting", options: this.options.slice(5, 7) },
-      { header: "Cache Settings", options: [this.options[7]] },
-      { header: "Interrupt", options: this.options.slice(8, 10) },
-      { header: "Dispel", options: [this.options[10]] },
-      { header: "Healthstone", options: [this.options[11]] },
+      { header: "Combat Behavior", options: this.options.slice(0, 5) },
+      { header: "Spell Casting", options: this.options.slice(5, 8) },
+      { header: "Cache Settings", options: [this.options[8]] },
+      { header: "Interrupt", options: this.options.slice(9, 11) },
+      { header: "Dispel", options: [this.options[11]] },
+      { header: "Healthstone", options: [this.options[12]] },
     ]);
   }
 
