@@ -63,7 +63,7 @@ export class DeathKnightUnholy extends Behavior {
           spell.cast("Death Strike", ret => me.pctHealth < 55 && (Spell.getTimeSinceLastCast("Death Strike") > 3000 || me.power > 50)),
           new bt.Decorator(
             ret => this.hasCooldownsReady(),
-            this.burstDamage()
+            this.burstCooldowns()
           ),
           new bt.Decorator(
             ret => me.hasAura(auras.forbiddenKnowledge),
@@ -75,16 +75,12 @@ export class DeathKnightUnholy extends Behavior {
     );
   }
 
-  burstDamage() {
+  burstCooldowns() {
     return new bt.Selector(
+      this.useRacials(),
       spell.cast("Army of the Dead", ret => true),
       spell.cast("Dark Transformation", ret => true),
-      this.useRacials(),
       spell.cast("Soul Reaper", on => me.target, ret => !!me.target),
-      spell.cast("Scourge Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() >= 3),
-      spell.cast("Death Coil", on => me.target, ret => me.target && (me.power > 80 || me.hasAura(auras.suddenDoom))),
-      spell.cast("Festering Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() < 2),
-      spell.cast("Death Coil", on => me.target, ret => me.target && me.power > 40),
     );
   }
 
@@ -100,6 +96,7 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Festering Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() < 2),
       spell.cast("Death Strike", ret => me.pctHealth < 70 && me.power > 80),
       spell.cast("Death Coil", on => me.target, ret => me.target && me.power > 40),
+      spell.cast("Scourge Strike", on => me.target, ret => !!me.target),
     );
   }
 
@@ -115,16 +112,14 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Festering Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() < 2),
       spell.cast("Death Strike", ret => me.pctHealth < 70 && me.power > 80),
       spell.cast("Necrotic Coil", on => me.target, ret => me.target && me.power > 40),
+      spell.cast("Scourge Strike", on => me.target, ret => !!me.target),
     );
   }
 
   burstSoon() {
     if (!Combat.burstToggle) return false;
-    const dtCd = spell.getCooldown("Dark Transformation");
     const armyCd = spell.getCooldown("Army of the Dead");
-    const dtReady = !dtCd || dtCd.timeleft <= 15000;
-    const armyReady = !armyCd || armyCd.timeleft <= 15000;
-    return dtReady || armyReady;
+    return !armyCd || armyCd.timeleft <= 15000;
   }
 
   getLesserGhoulStacks() {
@@ -132,11 +127,10 @@ export class DeathKnightUnholy extends Behavior {
   }
 
   hasCooldownsReady() {
-    return Combat.burstToggle && me.target && me.isWithinMeleeRange(me.target) &&
-      spell.getCharges("Putrefy") >= 2 && (
-        !spell.isOnCooldown("Army of the Dead") ||
-        !spell.isOnCooldown("Dark Transformation")
-      );
+    return Combat.burstToggle && me.target && me.isWithinMeleeRange(me.target) && (
+      !spell.isOnCooldown("Army of the Dead") ||
+      !spell.isOnCooldown("Dark Transformation")
+    );
   }
 
   strangulateTarget() {
