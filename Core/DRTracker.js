@@ -1,6 +1,6 @@
 import objMgr, { me } from './ObjectManager';
 import { drHelpers } from '../Data/PVPDRList';
-import { CombatLogEventTypes, CombatLogEventTypesMap, getEventTypeName } from '../Enums/CombatLogEvents';
+import { CombatLogEventTypes } from '../Enums/CombatLogEvents';
 import Settings from './Settings';
 
 /**
@@ -11,10 +11,11 @@ class DRTracker extends wow.EventListener {
   constructor() {
     super();
     this.enabled = true;
-    this.drData = new Map(); // unitGuid -> { category -> { stacks, endTime } }
-    this.ccData = new Map(); // unitGuid -> { spellId -> { category, appliedTime } }
-    this.drTimeout = 26000; // 26 seconds in milliseconds
-    this.drResetTime = 18500; // 18.5 seconds in milliseconds
+    this.drData = new Map(); // guidHash -> { category -> { stacks, endTime } }
+    this.ccData = new Map(); // guidHash -> { spellId -> { category, appliedTime } }
+    this.nameCache = new Map(); // guidHash -> last known unit name
+    this.drTimeout = 22000; // 22 seconds in milliseconds (Midnight: 16s reset + ~6s CC buffer)
+    this.drResetTime = 16500; // 16.5 seconds in milliseconds (Midnight: 16s + 0.5s latency)
     this.debugLogs = false;
   }
 
@@ -65,24 +66,27 @@ class DRTracker extends wow.EventListener {
       if (!category) return;
 
       const currentTime = Date.now();
-      const eventTypeName = getEventTypeName(eventType);
-      const targetName = eventData.target?.unsafeName || eventData.destination?.name;
 
       // Handle DR-relevant events using eventType numbers
       switch (eventType) {
         case CombatLogEventTypes.SPELL_AURA_APPLIED:
-          this.debugLog(`[DR Event] ${eventTypeName} - Spell: ${spellId}, Category: ${category}, Target: ${targetName}`);
-          this.applyDR(targetGuid, category, spellId, currentTime);
-          break;
         case CombatLogEventTypes.SPELL_AURA_REFRESH:
-          this.debugLog(`[DR Event] ${eventTypeName} - Spell: ${spellId}, Category: ${category}, Target: ${targetName}`);
           this.applyDR(targetGuid, category, spellId, currentTime);
           break;
         case CombatLogEventTypes.SPELL_AURA_REMOVED:
-          this.debugLog(`[DR Event] ${eventTypeName} - Spell: ${spellId}, Category: ${category}, Target: ${targetName}`);
-          this.fadeDR(targetGuid, category, currentTime);
-          this.removeActiveCC(targetGuid, spellId);
+          this.fadeDR(targetGuid, category, spellId, currentTime, "faded");
           break;
+        case CombatLogEventTypes.SPELL_AURA_BROKEN:
+        case CombatLogEventTypes.SPELL_AURA_BROKEN_SPELL:
+          this.fadeDR(targetGuid, category, spellId, currentTime, "broken");
+          break;
+        case CombatLogEventTypes.SPELL_MISSED: {
+          const missType = eventData.args?.[1];
+          if (missType === "IMMUNE") {
+            this.applyImmune(targetGuid, category, spellId, currentTime);
+          }
+          break;
+        }
       }
     } catch (error) {
       console.error('DRTracker processCombatLogEvent error:', error);
@@ -115,6 +119,10 @@ class DRTracker extends wow.EventListener {
       for (const [guidHash, unitDRData] of this.drData) {
         for (const [category, drInfo] of Object.entries(unitDRData)) {
           if (drInfo.endTime && currentTime > drInfo.endTime) {
+            const wasImmune = drInfo.stacks >= 2;
+            const name = this.getUnitNameByHash(guidHash);
+            const status = wasImmune ? "was IMMUNE" : `was ${drInfo.stacks}/2`;
+            this.debugLog(`[DR] ${name} ${category} RESET — ${status}, now CC-able`);
             delete unitDRData[category];
           }
         }
@@ -146,20 +154,19 @@ class DRTracker extends wow.EventListener {
     }
 
     const drInfo = unitDRData[category];
-    drInfo.stacks = Math.min(drInfo.stacks + 1, 3); // Max 3 stacks (immune)
+    drInfo.stacks = Math.min(drInfo.stacks + 1, 2); // Max 2 stacks (immune) — Midnight
     drInfo.endTime = currentTime + this.drTimeout;
 
-    // Track active CC
     this.addActiveCC(unitGuid, spellId, category, currentTime);
 
-    const unitName = this.getUnitName(unitGuid);
-    this.debugLog(`DR Applied: ${unitName} - ${category} (${drInfo.stacks} stacks) - Spell: ${spellId}`);
+    const tag = drInfo.stacks >= 2 ? " IMMUNE" : "";
+    this.debugLog(`[DR] ${this.getUnitName(unitGuid)} has ${drInfo.stacks}/2${tag} ${category} (spell ${spellId})`);
   }
 
   /**
    * Handle DR fade when CC spell ends
    */
-  fadeDR(unitGuid, category, currentTime) {
+  fadeDR(unitGuid, category, spellId, currentTime, reason = "faded") {
     const guidHash = unitGuid.hash;
     const unitDRData = this.drData.get(guidHash);
     if (!unitDRData || !unitDRData[category]) return;
@@ -167,18 +174,55 @@ class DRTracker extends wow.EventListener {
     const drInfo = unitDRData[category];
     drInfo.endTime = currentTime + this.drResetTime;
 
-    // Remove active CC for this category
     this.removeActiveCCByCategory(unitGuid, category);
+    if (spellId) this.removeActiveCC(unitGuid, spellId);
 
-    this.debugLog(`DR Faded: ${this.getUnitName(unitGuid)} - ${category} (${drInfo.stacks} stacks)`);
+    const status = drInfo.stacks >= 2 ? "IMMUNE" : `${drInfo.stacks}/2`;
+    this.debugLog(`[DR] ${this.getUnitName(unitGuid)} ${category} ${reason} — still ${status}, resets ${(this.drResetTime / 1000).toFixed(1)}s (spell ${spellId})`);
   }
 
   /**
-   * Get unit name by GUID
+   * Force a category to immune stacks (used when server confirms IMMUNE via SPELL_MISSED)
+   */
+  applyImmune(unitGuid, category, spellId, currentTime) {
+    const guidHash = unitGuid.hash;
+
+    if (!this.drData.has(guidHash)) {
+      this.drData.set(guidHash, {});
+    }
+
+    const unitDRData = this.drData.get(guidHash);
+
+    if (!unitDRData[category]) {
+      unitDRData[category] = { stacks: 0, endTime: 0 };
+    }
+
+    const drInfo = unitDRData[category];
+    const wasSynced = drInfo.stacks < 2;
+    drInfo.stacks = 2;
+    drInfo.endTime = currentTime + this.drTimeout;
+
+    const syncNote = wasSynced ? " (synced from server)" : "";
+    this.debugLog(`[DR] ${this.getUnitName(unitGuid)} is IMMUNE to ${category}${syncNote} (spell ${spellId})`);
+  }
+
+  /**
+   * Get unit name by GUID (caches for later use in update loop)
    */
   getUnitName(unitGuid) {
     const unit = objMgr.findObject(unitGuid);
-    return unit ? unit.unsafeName : 'Unknown';
+    const name = unit ? unit.unsafeName : 'Unknown';
+    if (unitGuid?.hash) {
+      this.nameCache.set(unitGuid.hash, name);
+    }
+    return name;
+  }
+
+  /**
+   * Get cached unit name by guid hash (for update loop where we only have the hash)
+   */
+  getUnitNameByHash(guidHash) {
+    return this.nameCache.get(guidHash) || 'Unknown';
   }
 
   /**
@@ -193,8 +237,6 @@ class DRTracker extends wow.EventListener {
 
     const unitCCData = this.ccData.get(guidHash);
     unitCCData[spellId] = { category, appliedTime: currentTime };
-
-    this.debugLog(`CC Applied: ${this.getUnitName(unitGuid)} - Spell: ${spellId}, Category: ${category}`);
   }
 
   /**
@@ -204,8 +246,6 @@ class DRTracker extends wow.EventListener {
     const guidHash = unitGuid.hash;
     const unitCCData = this.ccData.get(guidHash);
     if (!unitCCData || !unitCCData[spellId]) return;
-
-    this.debugLog(`CC Removed: ${this.getUnitName(unitGuid)} - Spell: ${spellId}`);
 
     delete unitCCData[spellId];
 
@@ -299,7 +339,7 @@ class DRTracker extends wow.EventListener {
    * Check if a target is immune to a spell category
    */
   isImmune(unitGuid, spellId) {
-    return this.getDRStacksBySpell(unitGuid, spellId) >= 3;
+    return this.getDRStacksBySpell(unitGuid, spellId) >= 2;
   }
 
   /**
@@ -329,6 +369,7 @@ class DRTracker extends wow.EventListener {
     if (!enabled) {
       this.drData.clear();
       this.ccData.clear();
+      this.nameCache.clear();
     }
   }
 
@@ -338,6 +379,7 @@ class DRTracker extends wow.EventListener {
   reset() {
     this.drData.clear();
     this.ccData.clear();
+    this.nameCache.clear();
   }
 }
 

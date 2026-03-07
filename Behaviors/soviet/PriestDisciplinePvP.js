@@ -72,7 +72,7 @@ export class PriestDisciplinePvP extends Behavior {
       header: "Mind Control Conditions",
       options: [
         { type: "slider", uid: "MindControlHealthThreshold", text: "All friends must be above % health (healer MC)", min: 70, max: 95, default: 80 },
-        { type: "slider", uid: "MindControlMaxDR", text: "Max Disorient DR on enemy healer", min: 0, max: 2, default: 1 },
+        { type: "slider", uid: "MindControlMaxDR", text: "Max Disorient DR on enemy healer", min: 0, max: 1, default: 1 },
         { type: "slider", uid: "MindControlDPSHealthThreshold", text: "All friends must be above % health (DPS MC)", min: 60, max: 90, default: 70 }
       ]
     },

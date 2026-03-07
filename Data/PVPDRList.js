@@ -14,9 +14,9 @@ export const drCategories = {
   knockback: "Knockbacks"
 };
 
-// DR reset times in seconds
+// DR reset times in seconds (Midnight: 16s base, down from 18s)
 export const drResetTimes = {
-  default: 18.5, // Static 18 sec (+0.5 latency) reset time for most categories
+  default: 16.5, // Static 16 sec (+0.5 latency) reset time for most categories
   npc: 20, // Against mobs it seems to still be dynamic, set it to max
   knockback: 10.5, // Knockbacks are immediately immune and only DRs for 10s
 };
@@ -27,11 +27,11 @@ export const drCategoriesPvE = {
   stun: "Stuns"
 };
 
-// Successive diminished durations
+// Successive diminished durations (Midnight: immune at 3rd application, down from 4th)
 export const drDiminishedDurations = {
-  // Decreases by 50%, immune at the 4th application
-  default: [0.50, 0.25],
-  // Decreases by 35%, immune at the 5th application
+  // Decreases by 50%, immune at the 3rd application
+  default: [0.50],
+  // Decreases by 35%, immune at the 5th application (PvE only, unchanged)
   taunt: [0.65, 0.42, 0.27],
   // Immediately immune
   knockback: []

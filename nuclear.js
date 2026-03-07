@@ -5,7 +5,6 @@ import { flagsComponents } from "./Core/Util";
 import colors from "./Enums/Colors";
 import { defaultHealTargeting } from "./Targeting/HealTargeting";
 import { defaultCombatTargeting } from "./Targeting/CombatTargeting";
-import commandListener from '@/Core/CommandListener'
 import { renderBehaviorTree } from "./Debug/BehaviorTreeDebug";
 import settings from "@/Core/Settings";
 import KeyBinding from "@/Core/KeyBinding";
@@ -32,8 +31,7 @@ class Nuclear extends wow.EventListener {
     // Initialize cooldown tracker
     cooldownTracker.initialize();
 
-    // Set default keybinding for pause (Something noone will press)
-    KeyBinding.setDefault("pause", imgui.Key.F9);
+    KeyBinding.setDefault("burstToggle", imgui.Key.X);
   }
 
   tick() {
@@ -50,12 +48,13 @@ class Nuclear extends wow.EventListener {
       return;
     }
 
-    // Don't process key presses if we're in key binding mode
     if (!KeyBinding.isBinding()) {
-      // Check for pause key press using the new KeyBinding system
       if (KeyBinding.isPressed("pause")) {
         this.isPaused = !this.isPaused;
         console.info(`Rotation ${this.isPaused ? 'paused' : 'resumed'}`);
+      }
+      if (KeyBinding.isPressed("burstToggle")) {
+        defaultCombatTargeting.toggleBurst();
       }
     }
 
@@ -101,8 +100,9 @@ class Nuclear extends wow.EventListener {
       // Add toggle window key binding button
       KeyBinding.button("toggleWindow", "Toggle Nuclear Window");
 
-      // Add toggle debug window button
       KeyBinding.button("toggleDebug", "Toggle Debug Window");
+
+      KeyBinding.button("burstToggle", "Burst Toggle");
     }
 
     // Info about key binding

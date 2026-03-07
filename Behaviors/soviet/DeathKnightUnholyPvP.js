@@ -11,22 +11,20 @@ import { RaceType } from "@/Enums/UnitEnums";
 
 const auras = {
   darkSuccor: 101568,
-  chainsOfIce: 45524,
-  festeringWound: 194310,
-  deathAndDecay: 188290,
+
   suddenDoom: 81340,
-  plagueBringer: 390178,
-  frostFever: 55095,
-  bloodPlague: 55078,
   virulentPlague: 191587,
-  deathRot: 377540,
-  trollbaneChainsOfIce: 444826,
+  darkTransformation: 1233448,
+  lesserGhoul: 1254252,
+  dreadPlague: 1240996,
   festeringScythe: 458123,
-  legionOfSouls: 383269,
-  rottenTouch: 390275,
-  darkTransform: 63560,
-  unholyAssault: 207289,
-}
+  forbiddenKnowledge: 1242223,
+};
+
+const spells = {
+  necroticCoil: 1242174,
+  graveyard: 383269,
+};
 
 export class DeathKnightUnholy extends Behavior {
   name = "Death Knight (Unholy) PvP";
@@ -40,7 +38,7 @@ export class DeathKnightUnholy extends Behavior {
       common.waitForCastOrChannel(),
       common.waitForTarget(),
       new bt.Decorator(
-        ret => me.pet && me.pet.hasVisibleAura(auras.darkTransform),
+        ret => me.pet && me.pet.hasVisibleAura(auras.darkTransformation),
         spell.interrupt("Leap", true)
       ),
       spell.interrupt("Gnaw", true),
@@ -48,20 +46,28 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Raise Dead", on => me, req => !Pet.current),
       spell.interrupt("Mind Freeze", true),
       spell.cast("Claw", on => me.target),
+      spell.cast("Huddle", ret => Pet.current &&
+        Pet.current.hasVisibleAura(auras.darkTransformation) &&
+        Spell.getTimeSinceLastCast("Dark Transformation") < 5000),
       spell.cast("Strangulate", on => this.strangulateTarget(), ret => me.target && me.target.pctHealth < 70 && this.strangulateTarget() !== undefined),
       spell.cast("Blinding Sleet", on => this.blindingSleetTarget(), ret => this.blindingSleetTarget() !== undefined),
       new bt.Decorator(
         ret => !spell.isGlobalCooldown(),
         new bt.Selector(
           common.waitForNotWaitingForArenaToStart(),
+          common.waitForCombat(),
           common.waitForNotSitting(),
           common.waitForNotMounted(),
           common.waitForCastOrChannel(),
           spell.cast("Death Strike", ret => me.pctHealth < 95 && me.hasAura(auras.darkSuccor)),
           spell.cast("Death Strike", ret => me.pctHealth < 55 && (Spell.getTimeSinceLastCast("Death Strike") > 3000 || me.power > 50)),
           new bt.Decorator(
-            ret => Combat.burstToggle && me.target && me.isWithinMeleeRange(me.target),
+            ret => this.hasCooldownsReady(),
             this.burstDamage()
+          ),
+          new bt.Decorator(
+            ret => me.hasAura(auras.forbiddenKnowledge),
+            this.forbiddenKnowledgeRotation()
           ),
           this.sustainedDamage(),
         )
@@ -69,70 +75,68 @@ export class DeathKnightUnholy extends Behavior {
     );
   }
 
-  // Burst Damage Rotation
   burstDamage() {
     return new bt.Selector(
-      // Major cooldowns first
       spell.cast("Army of the Dead", ret => true),
-      spell.cast("Summon Gargoyle", ret => true),
-      spell.cast("Unholy Assault", ret => true),
+      spell.cast("Dark Transformation", ret => true),
       this.useRacials(),
-
-      // Core burst rotation
-      // Use Apocalypse - spend 4 wounds and transform pet
-      spell.cast("Apocalypse", on => me.target, ret => me.target && me.targetUnit.getAuraStacks(auras.festeringWound) >= 2),
-
-      // Priority: Use Rune Strike to build wounds when Apocalypse is off cooldown but we don't have enough wounds
-      spell.cast("Rune Strike", on => me.target, ret => me.target &&
-        me.targetUnit.getAuraStacks(auras.festeringWound) <= 4 &&
-        !spell.isOnCooldown("Apocalypse")),
-
-      // Use Scourge Strike to spend wounds
-      spell.cast("Scourge Strike", on => me.target, ret => me.target && me.targetUnit.getAuraStacks(auras.festeringWound) > 2),
-
-      // Use Death Coil if high Runic Power or Sudden Doom proc with 3+ wounds
-      spell.cast("Death Coil", on => me.target, ret => me.target &&
-        (me.power > 80 || (me.hasAura(auras.suddenDoom) && me.targetUnit.getAuraStacks(auras.festeringWound) >= 3))),
-
-      // Maintain Virulent Plague
-      spell.cast("Outbreak", on => me.target, ret => me.target && !me.targetUnit.hasAuraByMe(auras.virulentPlague)),
-
-      // Use Rune Strike to reapply wounds when 1-4 remaining (fallback)
-      spell.cast("Rune Strike", on => me.target, ret => me.target && me.targetUnit.getAuraStacks(auras.festeringWound) <= 4),
-
-      // Death and Decay for area control
-      spell.cast("Death and Decay", on => me, ret => this.shouldDeathAndDecay()),
-
-      // Fallback Death Coil
-      spell.cast("Death Coil", on => me.target, ret => me.target && me.power > 60)
+      spell.cast("Soul Reaper", on => me.target, ret => !!me.target),
+      spell.cast("Scourge Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() >= 3),
+      spell.cast("Death Coil", on => me.target, ret => me.target && (me.power > 80 || me.hasAura(auras.suddenDoom))),
+      spell.cast("Festering Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() < 2),
+      spell.cast("Death Coil", on => me.target, ret => me.target && me.power > 40),
     );
   }
 
-  // New Sustained Damage Rotation
   sustainedDamage() {
     return new bt.Selector(
-      // Maintain Virulent Plague on as many targets as possible
       spell.cast("Outbreak", on => me.target, ret => me.target && !me.targetUnit.hasAuraByMe(auras.virulentPlague)),
-
-      // Use Rune Strike to generate and refresh Festering Wounds
-      spell.cast("Rune Strike", on => me.target, ret => me.target && me.targetUnit.getAuraStacks(auras.festeringWound) <= 3),
-
-      // Use Scourge Strike to spend wounds and maintain plaguebringer
-      spell.cast("Scourge Strike", on => me.target, ret => me.target && me.targetUnit.getAuraStacks(auras.festeringWound) > 1),
-
-      // Use Death Coil if high Runic Power or Sudden Doom proc
+      spell.cast("Putrefy", on => me.target, ret => me.target && spell.getCharges("Putrefy") >= 3),
+      spell.cast("Putrefy", on => me.target, ret => me.target &&
+        spell.getCharges("Putrefy") >= 2 && !this.burstSoon()),
+      spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
       spell.cast("Death Coil", on => me.target, ret => me.target && (me.power > 80 || me.hasAura(auras.suddenDoom))),
-
-      // Death and Decay for area control
-      spell.cast("Death and Decay", ret => this.shouldDeathAndDecay()),
-
-      // Fallback Death Coil
-      spell.cast("Death Coil", on => me.target, ret => me.target && me.power > 60)
+      spell.cast("Scourge Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() >= 3),
+      spell.cast("Festering Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() < 2),
+      spell.cast("Death Strike", ret => me.pctHealth < 70 && me.power > 80),
+      spell.cast("Death Coil", on => me.target, ret => me.target && me.power > 40),
     );
   }
 
-  shouldDeathAndDecay() {
-    return me.targetUnit && me.isWithinMeleeRange(me.targetUnit) && !me.hasAura(auras.deathAndDecay)
+  forbiddenKnowledgeRotation() {
+    return new bt.Selector(
+      spell.cast("Outbreak", on => me.target, ret => me.target && !me.targetUnit.hasAuraByMe(auras.virulentPlague)),
+      spell.cast("Putrefy", on => me.target, ret => me.target && spell.getCharges("Putrefy") >= 3),
+      spell.cast("Putrefy", on => me.target, ret => me.target &&
+        spell.getCharges("Putrefy") >= 2 && !this.burstSoon()),
+      spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
+      spell.cast("Necrotic Coil", on => me.target, ret => me.target && (me.power > 80 || me.hasAura(auras.suddenDoom))),
+      spell.cast("Scourge Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() >= 3),
+      spell.cast("Festering Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() < 2),
+      spell.cast("Death Strike", ret => me.pctHealth < 70 && me.power > 80),
+      spell.cast("Necrotic Coil", on => me.target, ret => me.target && me.power > 40),
+    );
+  }
+
+  burstSoon() {
+    if (!Combat.burstToggle) return false;
+    const dtCd = spell.getCooldown("Dark Transformation");
+    const armyCd = spell.getCooldown("Army of the Dead");
+    const dtReady = !dtCd || dtCd.timeleft <= 15000;
+    const armyReady = !armyCd || armyCd.timeleft <= 15000;
+    return dtReady || armyReady;
+  }
+
+  getLesserGhoulStacks() {
+    return me.getAuraStacks(auras.lesserGhoul);
+  }
+
+  hasCooldownsReady() {
+    return Combat.burstToggle && me.target && me.isWithinMeleeRange(me.target) &&
+      spell.getCharges("Putrefy") >= 2 && (
+        !spell.isOnCooldown("Army of the Dead") ||
+        !spell.isOnCooldown("Dark Transformation")
+      );
   }
 
   strangulateTarget() {
@@ -166,10 +170,9 @@ export class DeathKnightUnholy extends Behavior {
     return undefined;
   }
 
-  // Racial abilities
   useRacials() {
     return new bt.Selector(
-      spell.cast("Blood Fury", on => me, ret => me.race === RaceType.Orc && me.hasAura(auras.unholyAssault)),
+      spell.cast("Blood Fury", on => me, ret => me.race === RaceType.Orc),
     );
   }
 }
