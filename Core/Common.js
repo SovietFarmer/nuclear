@@ -412,6 +412,15 @@ class Common {
     return this.useEquippedTrinket(null, targetSelector, conditions);
   }
 
+  static waitForCombat() {
+    return new bt.Action(() => {
+      if (!me.inCombat()) {
+        return bt.Status.Success;
+      }
+      return bt.Status.Failure;
+    }, "Wait for combat");
+  }
+
   static waitForNotWaitingForArenaToStart() {
     return new bt.Action(() => {
       if (me.hasArenaPreparation()) {

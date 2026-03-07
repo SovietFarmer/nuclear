@@ -732,7 +732,7 @@ Object.defineProperties(wow.CGUnit.prototype, {
   /**
    * Get DR stacks for a specific spell on this unit
    * @param {number} spellId - The spell ID to check DR for
-   * @returns {number} - Number of DR stacks (0-3, where 3 = immune)
+   * @returns {number} - Number of DR stacks (0-2, where 2 = immune)
    */
   getDRStacks: {
     value: function(spellId) {
@@ -775,7 +775,7 @@ Object.defineProperties(wow.CGUnit.prototype, {
   /**
    * Get the diminished duration multiplier for a spell on this unit
    * @param {number} spellId - The spell ID to check
-   * @returns {number} - Duration multiplier (1.0 = full, 0.5 = half, 0.25 = quarter, 0 = immune)
+   * @returns {number} - Duration multiplier (1.0 = full, 0.5 = half, 0 = immune)
    */
   getDiminishedMultiplier: {
     value: function(spellId) {
@@ -816,7 +816,7 @@ Object.defineProperties(wow.CGUnit.prototype, {
   /**
    * Get DR stacks for a specific category on this unit
    * @param {string} category - The DR category to check
-   * @returns {number} - Number of DR stacks (0-3, where 3 = immune)
+   * @returns {number} - Number of DR stacks (0-2, where 2 = immune)
    */
   getDR: {
     value: function(category) {

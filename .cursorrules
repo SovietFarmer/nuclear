@@ -41,24 +41,59 @@ so you know what methods are actually available and how they work under the hood
   spell.isSpellKnown() before calling isOnCooldown()/getCooldown() on optional talents.
 
 # Rotation Design Patterns
-- Split cooldowns into burstCooldowns() (gated by burst toggle) and rotationalCooldowns().
+- Split cooldowns into burstCooldowns() (gated by burst toggle) and sustained damage.
+  burstCooldowns() should contain ONLY cooldowns (racials, trinkets, major CDs) — no damage
+  fillers. When all CDs are on cooldown the Selector returns Failure and falls through to
+  the sustained/proc rotation for damage. This prevents burst from starving sustained.
 - Burst toggle uses combat.burstToggle (from defaultCombatTargeting). Gate burstCooldowns()
   with a hasCooldownsReady() method that checks combat.burstToggle && any CD is off cooldown.
   Wrap in bt.Decorator(ret => this.hasCooldownsReady(), this.burstCooldowns()). Never use a
   custom Settings checkbox for burst — always use the global toggle.
+- Place useRacials() FIRST in burstCooldowns() so they fire at the start of the burst window
+  alongside major CDs, not as a stray cast later in the sequence.
+- For melee specs, add me.isWithinMeleeRange(me.target) to hasCooldownsReady(). Self-cast
+  abilities (racials, Dark Transformation, Army of the Dead, etc.) bypass spell range checks
+  and will fire even when the target is 40 yards away.
+- Use common.waitForCombat() inside the GCD Selector to prevent the rotation from popping
+  CDs or doing damage out of combat. Place it after waitForNotWaitingForArenaToStart().
+  Off-GCD abilities (pet commands, interrupts, Raise Dead) should remain OUTSIDE this gate.
+- Threshold-based ability priorities can create dead zones. Example: Scourge Strike at >= 3
+  stacks and Festering Strike at < 2 stacks leaves a gap at exactly 2 stacks where neither
+  fires. Always add an unconditional fallback filler (e.g. Scourge Strike) at the bottom of
+  every Selector to prevent idle GCDs.
 - Charge-based abilities at multiple priorities need careful ordering — anti-cap checks
-  BELOW core rotational abilities or they eat GCDs.
+  BELOW core rotational abilities or they eat GCDs. For charge dump logic, use a burstSoon()
+  helper that checks CD timeleft to decide whether to save charges for an upcoming burst
+  window (e.g. spell.getCooldown("Army of the Dead").timeleft <= 15000).
 - AoE plague/dot checks on "any enemy" cause spam; check current target only for single-target
   applicators and trust AoE spread mechanics.
 - Healer CDs: the game's aura cache is ~500ms. Multiple CDs in a Selector can stack on
   consecutive ticks. Use getTimeSinceLastCast() with a 2-3s window to prevent overlap.
   Add a low-HP override so CDs can still stack when someone is dying.
 
+# PvP-Specific Patterns
+- canCC() checks PVPImmuneToCC (bubble, ice block, bladestorm, etc.) but does NOT check
+  movement immunities like Blessing of Freedom. For roots/slows, check Freedom separately.
+- The DR tracker updates from combat log events with ~500ms lag. When casting DR-tracked
+  abilities (roots, stuns), add getTimeSinceLastCast() with a 2-3s window to prevent
+  double/triple casts before the DR tracker registers the application.
+- For abilities targeting players (slows, roots), always check isPlayer() to avoid wasting
+  GCDs on totems, pets, or other non-player units.
+- Proc-based rotations (e.g. Forbidden Knowledge swapping Death Coil for Necrotic Coil)
+  should be a separate method gated by a Decorator between burst and sustained in build().
+  Pattern: burst → proc rotation → sustained. The proc rotation mirrors sustained but
+  swaps the relevant spells.
+
 # Aura / Spell ID Rules
 - hasAura(), getAura(), getAuraByMe() etc. accept both numeric IDs and string names.
   Prefer numeric IDs defined in a const auras = {} block at the top of the rotation file.
   Use string names only as fallback for unknown/new expansion aura IDs.
 - Spell casts always use string names: spell.cast("Spell Name", ...).
+- In Midnight (12.x), override spells (e.g. Vampiric Strike overriding Heart Strike) must
+  be cast by their OVERRIDE name, not the base spell name. getSpell() returns the base spell
+  which may not work for overrides. Use separate spell.cast() entries: try the override first,
+  then the base spell as fallback. Example: spell.cast("Vampiric Strike", ...) before
+  spell.cast("Heart Strike", ...) in a Selector.
 - Pet buffs must be checked on Pet.current, not on me.
 - New expansion aura IDs are unknown until verified. Use string name as fallback
   (e.g. me.hasAura("Tempest")) — do NOT use 0 as placeholder, it can match unexpectedly.

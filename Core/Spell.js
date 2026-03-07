@@ -111,8 +111,8 @@ class Spell extends wow.EventListener {
         const target = CommandListener.targetFunctions[queuedSpell.target]();
 
         if (!target) {
-          console.info(`Target ${queuedSpell.target} not found. Removing from queue.`);
-          CommandListener.removeSpellFromQueue(queuedSpell.spellId);
+          console.info(`[SpellQueue] Target ${queuedSpell.target} not found for ${queuedSpell.spellName} — removing`);
+          CommandListener.removeSpellFromQueue(queuedSpell.spellName);
           return bt.Status.Failure;
         }
 
@@ -197,11 +197,14 @@ class Spell extends wow.EventListener {
         if (!this.canCast(spell, target, options)) {
           return bt.Status.Failure;
         }
+
+        this._lastCastTimes.set(spell.id, currentTime);
+
         if (!this.castPrimitive(spell, target)) {
+          this._lastCastTimes.delete(spell.id);
           return bt.Status.Failure;
         }
 
-        this._lastCastTimes.set(spell.id, currentTime);
         return bt.Status.Success;
       }),
 

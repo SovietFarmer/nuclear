@@ -40,6 +40,7 @@ nuclear.initialize().then(() => {
     perfMgr.begin("total");
     objMgr.tick();
     nuclear.tick();
+    commandListener.tick();
     me && extraModules.forEach(module => module.tick());
     dbgWindow.tick();
     commandListener.renderQueuedSpells();

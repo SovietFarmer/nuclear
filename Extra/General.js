@@ -17,6 +17,7 @@ class General {
     { type: "slider", uid: "TargetSwitchDelay", text: "Target Switch Delay (ms)", min: 0, max: 5000, default: 1000 },
     { type: "combobox", uid: "TargetPriority", text: "Target Priority", options: ["Closest", "Lowest Health", "Highest Health"], default: "Closest" },
     // Spell Cast Settings
+    { type: "checkbox", uid: "AutoQueueFailedCasts", text: "Auto-Queue Failed Player Casts", default: true },
     { type: "slider", uid: "SpellCastDelay", text: "Spell Cast Delay (ms)", min: 0, max: 1000, default: 0 },
     { type: "slider", uid: "SpellQueueExpirationTimer", text: "Spell Queue Expiration Timer (ms)", min: 2000, max: 5000, default: 3000 },
     { type: "checkbox", uid: "SpellDebugCompare", text: "Log Default Rotation Comparison", default: false },
@@ -34,11 +35,11 @@ class General {
   static renderOptions(renderFunction) {
     renderFunction([
       { header: "Combat Behavior", options: this.options.slice(0, 5) },
-      { header: "Spell Casting", options: this.options.slice(5, 8) },
-      { header: "Cache Settings", options: [this.options[8]] },
-      { header: "Interrupt", options: this.options.slice(9, 11) },
-      { header: "Dispel", options: [this.options[11]] },
-      { header: "Healthstone", options: [this.options[12]] },
+      { header: "Spell Casting", options: this.options.slice(5, 9) },
+      { header: "Cache Settings", options: [this.options[9]] },
+      { header: "Interrupt", options: this.options.slice(10, 12) },
+      { header: "Dispel", options: [this.options[12]] },
+      { header: "Healthstone", options: [this.options[13]] },
     ]);
   }
 
