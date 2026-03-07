@@ -97,9 +97,7 @@ class CommandListener {
     if (!spell || !spell.name) return;
 
     const now = wow.frameTime;
-    if (this._lastFailedTime[spellId] && (now - this._lastFailedTime[spellId]) < 500) {
-      return;
-    }
+    if (this._lastFailedTime[spellId] && (now - this._lastFailedTime[spellId]) < 500) return;
     this._lastFailedTime[spellId] = now;
 
     const spellName = spell.name.toLowerCase();
@@ -109,7 +107,7 @@ class CommandListener {
 
     if (knownSpell.cooldown && knownSpell.cooldown.timeleft > 1500) return;
 
-    const target = this.resolveTarget(eventData.destination, spellId);
+    const target = this.resolveTarget(eventData.destination, spellName, knownSpell);
 
     const targetUnit = this.targetFunctions[target]?.();
     if (!targetUnit) return;
@@ -122,27 +120,25 @@ class CommandListener {
     });
   }
 
-  resolveTarget(destination, spellId) {
-    if (!destination || !destination.guid || destination.guid.toString() === "0:0 (0)") {
-      if (spellId) {
-        const spellInfo = new wow.Spell(spellId);
-        if (spellInfo && spellInfo.isHarmful) return "target";
-      }
-      return "me";
-    }
+  resolveTarget(destination, spellName, knownSpell) {
+    // 1. User-configured slot (explicit intent — handles focus, self, ground-targeted)
+    const slots = this.getSlots();
+    const matchingSlot = slots.find(s => s.spellName && s.spellName.toLowerCase() === spellName);
+    if (matchingSlot) return matchingSlot.target;
 
-    if (me.guid.equals(destination.guid)) {
-      return "me";
-    }
-
-    if (me.focusTarget && me.focusTarget.guid && destination.guid.equals(me.focusTarget.guid)) {
-      return "focus";
-    }
-
-    if (me.targetUnit && me.targetUnit.guid && destination.guid.equals(me.targetUnit.guid)) {
+    // 2. CLEU destination GUID (available when bot is paused)
+    if (destination?.guid && destination.guid.toString() !== "0:0 (0)") {
+      if (me.guid.equals(destination.guid)) return "me";
+      if (me.focusTarget?.guid?.equals(destination.guid)) return "focus";
       return "target";
     }
 
+    // 3. PBAoE / self-buff: 0 range + not melee (Blinding Sleet, etc.)
+    if (knownSpell && knownSpell.baseMaxRange === 0 && !knownSpell.usesMeleeRange) {
+      return "me";
+    }
+
+    // 4. Default — most player-initiated failed casts are offensive
     return "target";
   }
 
@@ -177,27 +173,21 @@ class CommandListener {
 
   addSpellToQueue(spellInfo) {
     if (this.spellQueue.some(spell => spell.spellId === spellInfo.spellId)) {
-      console.info(`[SpellQueue] Already queued: ${spellInfo.spellName} — skipping duplicate`);
       return false;
     }
     this.spellQueue.push({ ...spellInfo, timestamp: wow.frameTime });
-    console.info(`[SpellQueue] Added: ${spellInfo.spellName} (ID: ${spellInfo.spellId}) on ${spellInfo.target}${spellInfo.fromFailedCast ? " [failed cast]" : " [keybind]"}`);
+    console.info(`[SpellQueue] Added: ${spellInfo.spellName} on ${spellInfo.target}${spellInfo.fromFailedCast ? " [failed cast]" : " [keybind]"}`);
     return true;
   }
 
   getNextQueuedSpell() {
     const currentTime = wow.frameTime;
     const defaultExpiry = Settings.SpellQueueExpirationTimer || 5000;
-    const failedCastExpiry = 1800;
+    const failedCastExpiry = 3000;
 
     this.spellQueue = this.spellQueue.filter(spell => {
       const expiry = spell.fromFailedCast ? failedCastExpiry : defaultExpiry;
-      if (spell.timestamp >= currentTime - expiry) {
-        return true;
-      }
-      const age = ((currentTime - spell.timestamp) / 1000).toFixed(1);
-      console.info(`[SpellQueue] Expired: ${spell.spellName} on ${spell.target} after ${age}s`);
-      return false;
+      return spell.timestamp >= currentTime - expiry;
     });
 
     return this.spellQueue[0] || null;
@@ -308,7 +298,8 @@ class FailedCastListener extends wow.EventListener {
   onEvent(event) {
     if (event.name !== "COMBAT_LOG_EVENT_UNFILTERED") return;
     const [eventData] = event.args;
-    if (eventData.eventType === 7) {
+
+    if (eventData.eventType === 7 && Settings.AutoQueueFailedCasts) {
       commandListener.handleFailedCast(eventData);
     }
   }
