@@ -9,13 +9,22 @@ import { defaultCombatTargeting as combat } from "@/Targeting/CombatTargeting";
 import Settings from "@/Core/Settings";
 import { RaceType } from "@/Enums/UnitEnums";
 
+const auras = {
+  dancing_rune_weapon: 81256,
+  essence_of_the_blood_queen: 433925,
+  vampiric_strike_proc: 433899,
+  vampiric_strike_talent: 433901,
+  exterminate: 441378,
+  blood_plague: 55078,
+};
+
 export class DeathKnightBloodBehavior extends Behavior {
   context = BehaviorContext.Any;
   specialization = Specialization.DeathKnight.Blood;
-  name = "Jmr Blood DK";
+  name = "Jmr Blood DK (Midnight)";
 
   static settings = [
-    { header: "Jmr Blood DK Settings" },
+    { header: "Jmr Blood DK Settings (Midnight)" },
     { header: "" },
     { header: "Auto Taunt" },
     { type: "checkbox", uid: "JmrADC", text: "Auto Dark Command", default: false },
@@ -25,8 +34,6 @@ export class DeathKnightBloodBehavior extends Behavior {
     { type: "slider", uid: "JmrDSPercent", text: "Death Strike Health Percent", min: 0, max: 100, default: 75 },
     { type: "slider", uid: "JmrRuneTapSetting", text: "Rune Tap Health Percent", min: 0, max: 100, default: 65 },
     { type: "slider", uid: "JmrIBFSetting", text: "Icebound Fortitude Health Percent", min: 0, max: 100, default: 40 },
-    { type: "slider", uid: "JmrVBSetting", text: "Vampiric Blood Health Percent", min: 0, max: 100, default: 55 },
-    { type: "slider", uid: "JmrDeathStrikeDumpAmount", text: "Death Strike Dump Amount", min: 0, max: 100, default: 65 },
     { type: "slider", uid: "JmrLichborneSetting", text: "Lichborne Health Percent", min: 0, max: 100, default: 50 },
     { header: "" },
     { header: "Offensive Cooldowns" },
@@ -38,158 +45,40 @@ export class DeathKnightBloodBehavior extends Behavior {
 
   constructor() {
     super();
-    console.debug("DeathKnightBloodBehavior initialized");
-
     this.eventListener = new wow.EventListener();
     this.eventListener.onEvent = (event) => {
       if (event.name === "COMBAT_LOG_EVENT_UNFILTERED") {
         this.handleCombatLogEvent(event);
-        //console.debug("Received combat log event");
-      // } else if (event.name === "UNIT_SPELLCAST_START") {
-      //   this.handleSpellCastStart(event);
-      //   console.debug("Received spell cast start event");
       }
     };
   }
 
   handleCombatLogEvent(event) {
+    if (typeof event.args !== 'object') return;
+    if (event.args.length === 0) return;
 
-    const spellSchoolsMap = {
-      0: "None",
-      1: "Physical",
-      2: "Holy",
-      4: "Fire",
-      8: "Nature",
-      16: "Frost",
-      32: "Shadow",
-      64: "Arcane",
-      3: "Holystrike",
-      5: "Flamestrike",
-      6: "Holyfire",
-      9: "Stormstrike",
-      10: "Holystorm",
-      12: "Firestorm",
-      17: "Froststrike",
-      18: "Holyfrost",
-      20: "Frostfire",
-      24: "Froststorm",
-      33: "Shadowstrike",
-      34: "Shadowlight",
-      36: "Shadowflame",
-      40: "Shadowstorm",
-      48: "Shadowfrost",
-      65: "Spellstrike",
-      66: "Divine",
-      68: "Spellfire",
-      72: "Spellstorm",
-      80: "Spellfrost",
-      96: "Spellshadow",
-      28: "Elemental",
-      124: "Chromatic",
-      126: "Magic",
-      127: "Chaos"
-    };
+    const eventData = event.args[0];
+    const subEvent = eventData.eventType || eventData[1];
+    const destName = eventData.destination?.name || "Unknown Target";
+    const spellID = eventData.args ? eventData.args[0] : undefined;
+    const spellSchool = eventData.args ? eventData.args[90] : undefined;
 
-    const eventTypesMap = {
-      0: "ENVIRONMENTAL_DAMAGE",
-      1: "SWING_DAMAGE",
-      2: "SWING_MISSED",
-      3: "RANGE_DAMAGE",
-      4: "RANGE_MISSED",
-      5: "SPELL_CAST_START",
-      6: "SPELL_CAST_SUCCESS",
-      7: "SPELL_CAST_FAILED",
-      8: "SPELL_MISSED",
-      9: "SPELL_DAMAGE",
-      10: "SPELL_HEAL",
-      11: "SPELL_ENERGIZE",
-      12: "SPELL_DRAIN",
-      13: "SPELL_LEECH",
-      14: "SPELL_INSTAKILL",
-      15: "SPELL_SUMMON",
-      16: "SPELL_CREATE",
-      17: "SPELL_INTERRUPT",
-      18: "SPELL_EXTRA_ATTACKS",
-      19: "SPELL_DURABILITY_DAMAGE",
-      20: "SPELL_DURABILITY_DAMAGE_ALL",
-      21: "SPELL_AURA_APPLIED",
-      22: "SPELL_AURA_APPLIED_DOSE",
-      23: "SPELL_AURA_REMOVED_DOSE",
-      24: "SPELL_AURA_REMOVED",
-      25: "SPELL_AURA_REFRESH",
-      26: "SPELL_DISPEL",
-      27: "SPELL_STOLEN",
-      28: "SPELL_AURA_BROKEN",
-      29: "SPELL_AURA_BROKEN_SPELL",
-      30: "DAMAGE_AURA_BROKEN",
-      31: "ENCHANT_APPLIED",
-      32: "ENCHANT_REMOVED",
-      33: "SPELL_PERIODIC_MISSED",
-      34: "SPELL_PERIODIC_DAMAGE",
-      35: "SPELL_PERIODIC_HEAL",
-      36: "SPELL_PERIODIC_ENERGIZE",
-      37: "SPELL_PERIODIC_DRAIN",
-      38: "SPELL_PERIODIC_LEECH",
-      39: "SPELL_DISPEL_FAILED",
-      40: "DAMAGE_SHIELD",
-      41: "DAMAGE_SHIELD_MISSED",
-      42: "DAMAGE_SPLIT",
-      43: "PARTY_KILL",
-      44: "UNIT_DIED",
-      45: "UNIT_DESTROYED",
-      46: "SPELL_RESURRECT",
-      47: "SPELL_BUILDING_DAMAGE",
-      48: "SPELL_BUILDING_HEAL",
-      49: "UNIT_DISSIPATES",
-      50: "SWING_DAMAGE_LANDED",
-      51: "SPELL_ABSORBED",
-      52: "SPELL_HEAL_ABSORBED",
-      53: "SPELL_EMPOWER_START",
-      54: "SPELL_EMPOWER_END",
-      55: "SPELL_EMPOWER_INTERRUPT"
-  };
-
-    if (typeof event.args === 'object') {
-        //console.debug("Event args is an object, logging each key-value pair:");
-        for (const [key, value] of Object.entries(event.args)) {
-            //console.debug(`Key: ${key}, Value: ${JSON.stringify(value)}`);
-        }
-    } else {
-        return;
-    }
-
-    if (event.args.length > 0) {
-        const eventData = event.args[0];
-        const subEvent = eventData.eventType || eventData[1];
-        const sourceName = eventData.source?.name || "Unknown Source";
-        const destName = eventData.destination?.name || "Unknown Target";
-        const spellID = eventData.args ? eventData.args[0] : undefined;
-        const spellName = spellID ? (new wow.Spell(spellID)).name : "Unknown Spell";
-        const spellSchool = eventData.args ? eventData.args[90] : undefined;
-        const schoolName = spellSchoolsMap[spellSchool] || `Unknown (${spellSchool})`;
-        const subEventName = eventTypesMap[subEvent] || `Unknown (${subEvent})`;
-        const destGUID = eventData.destination?.guid || undefined;
-
-        if (subEventName === "SPELL_CAST_START" && destName === me.name && spellSchool !== 0 && spellSchool !== 1) {
-          const sourceUnit = objMgr.findObject(eventData.source?.guid);
-          if (sourceUnit instanceof wow.CGUnit && sourceUnit.inCombatWithMe) {
-            const spellInfo = sourceUnit.spellInfo;
-            if (spellInfo && spellInfo.cast !== 0) {
-              this.lastEnemyCast = {
-                spellID,
-                spellName,
-                sourceName,
-                sourceUnit,
-                castStart: wow.frameTime,
-                castEnd: spellInfo.castEnd
-              };
-              console.debug(`Enemy ${this.lastEnemyCast.sourceName} is casting ${this.lastEnemyCast.spellName} (${this.lastEnemyCast.spellID}). Cast progress: ${castProgress * 100}%`);
-          }
+    if (subEvent === 5 && destName === me.name && spellSchool !== 0 && spellSchool !== 1) {
+      const sourceUnit = objMgr.findObject(eventData.source?.guid);
+      if (sourceUnit instanceof wow.CGUnit && sourceUnit.inCombatWithMe) {
+        const spellInfo = sourceUnit.spellInfo;
+        if (spellInfo && spellInfo.cast !== 0) {
+          this.lastEnemyCast = {
+            spellID,
+            sourceName: eventData.source?.name || "Unknown",
+            sourceUnit,
+            castStart: wow.frameTime,
+            castEnd: spellInfo.castEnd
+          };
         }
       }
     }
   }
-
 
   destroy() {
     super.destroy();
@@ -199,15 +88,16 @@ export class DeathKnightBloodBehavior extends Behavior {
     if (this.lastEnemyCast) {
       const currentTime = wow.frameTime;
       const castProgress = (currentTime - this.lastEnemyCast.castStart) / (this.lastEnemyCast.castEnd - this.lastEnemyCast.castStart);
-
       if (castProgress >= 0.90 && castProgress <= 0.99) {
-        console.debug(`Enemy ${this.lastEnemyCast.sourceName} is casting ${this.lastEnemyCast.spellName} (${this.lastEnemyCast.spellID}). Cast progress: ${castProgress * 100}%`);
         return true;
       }
     }
     return false;
   }
 
+  isSanlayn() {
+    return me.hasAura(auras.vampiric_strike_talent);
+  }
 
   build() {
     return new bt.Selector(
@@ -216,56 +106,87 @@ export class DeathKnightBloodBehavior extends Behavior {
         ret => !spell.isGlobalCooldown(),
         new bt.Selector(
           common.waitForCastOrChannel(),
+
+          // --- Utility ---
           spell.cast("Raise Ally",
             on => me.targetUnit,
             req => me.targetUnit !== null && me.targetUnit.deadOrGhost && !me.targetUnit.isEnemy
           ),
           spell.cast("Anti-Magic Shell",
-          on => me,
-          req => this.shouldUseAntiMagicShell() && !me.hasVisibleAura("Anti-Magic Shell")
+            on => me,
+            req => this.shouldUseAntiMagicShell() && !me.hasVisibleAura("Anti-Magic Shell")
           ),
           common.waitForFacing(),
           common.waitForTarget(),
           spell.interrupt("Mind Freeze", false),
+
+          // --- Auto Taunt ---
           spell.cast("Dark Command",
             on => this.getValidTarget(unit => unit.inCombat() && unit.distanceTo(me) <= 30 && !unit.isTanking()),
-            req => this.getValidTarget(unit => unit.inCombat() && unit.distanceTo(me) <= 30 && !unit.isTanking()) !== undefined && Settings.JmrADC),
+            req => this.getValidTarget(unit => unit.inCombat() && unit.distanceTo(me) <= 30 && !unit.isTanking()) !== undefined && Settings.JmrADC
+          ),
           spell.cast("Death Grip",
             on => this.getValidTarget(unit => unit.inCombat() && unit.distanceTo(me) <= 30 && !unit.isTanking()),
-            req => this.getValidTarget(unit => unit.inCombat() && unit.distanceTo(me) <= 30 && !unit.isTanking()) !== undefined && spell.getCharges("Death Grip") > Settings.JmrDeathGripCharges && spell.getCharges("Death Grip") >= 1 && Settings.JmrADG),
+            req => this.getValidTarget(unit => unit.inCombat() && unit.distanceTo(me) <= 30 && !unit.isTanking()) !== undefined
+              && spell.getCharges("Death Grip") > Settings.JmrDeathGripCharges
+              && spell.getCharges("Death Grip") >= 1
+              && Settings.JmrADG
+          ),
+
+          // --- Wait for combat before CDs/rotation ---
+          common.waitForCombat(),
+
+          // --- AoE Blood Plague emergency ---
           spell.cast("Blood Boil",
             on => me,
-            req => me.getUnitsAroundCount(10) > 3 && spell.getCharges("Blood Boil") >= 1 && this.UnitsAroundMissingBloodPlague()),
+            req => me.getUnitsAroundCount(10) > 3 && spell.getCharges("Blood Boil") >= 1 && this.UnitsAroundMissingBloodPlague()
+          ),
+
+          // --- Defensives ---
           spell.cast("Rune Tap", on => me, req => me.inCombat() && me.pctHealth < Settings.JmrRuneTapSetting && !me.hasVisibleAura("Rune Tap")),
           spell.cast("Death Strike", on => this.getCurrentTarget(), req => me.pctHealth < Settings.JmrDSPercent),
-          spell.cast("Raise Dead", req => me.inCombat() && me.target),
-          spell.cast("Reaper's Mark"),
-          spell.cast("Icebound Fortitude", on => me, req => (!me.hasVisibleAura("Dancing Rune Weapon") && !me.hasVisibleAura("Vampiric Blood") && me.pctHealth < Settings.JmrIBFSetting) || me.isStunned()),
-          spell.cast("Lichborne", on => me, req => me.isFeared() || me.pctHealth < Settings.JmrLichborneSetting),
-          spell.cast("Vampiric Blood", on => me, req => (!me.hasVisibleAura("Dancing Rune Weapon") && !me.hasVisibleAura("Icebound Fortitude") && !me.hasVisibleAura("Vampiric Blood") && me.pctHealth < Settings.JmrVBSetting) || me.isStunned()),
-          spell.cast("Death's Caress", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Bone Shield")),
-          spell.cast("Death and Decay", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Death and Decay")),
-          spell.cast("Death Strike", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Coagulopathy") || !me.hasVisibleAura("Icy Talons") || me.powerByType(PowerType.RunicPower) >= Settings.JmrDeathStrikeDumpAmount || this.runicPowerDeficit() <= 20 || me.target.timeToDeath() < 10),
-          spell.cast("Blooddrinker", req => !me.hasVisibleAura("Dancing Rune Weapon")),
-          spell.cast("Sacrificial Pact", req => !me.hasVisibleAura("Dancing Rune Weapon") && (spell.getCooldown("Raise Dead").timeleft < 2000 || me.target.timeToDeath() < 1.5)),
-          spell.cast("Blood Tap", req => (me.powerByType(PowerType.Runes) <= 2 && spell.getCharges("Blood Tap") >= 2) || me.powerByType(PowerType.Runes) < 3),
-          spell.cast("Gorefiend's Grasp", req => me.hasAura("Tightening Grasp")),
-          spell.cast("Empower Rune Weapon", req => me.powerByType(PowerType.Runes) < 6 && this.runicPowerDeficit() > 5),
-          spell.cast("Dancing Rune Weapon", req => this.shouldUseDRW()),
-          this.useRacials(),
-          spell.cast("Arcane Torrent", on => me, req => me.powerByType(PowerType.RunicPower) < 80),
-          new bt.Decorator(
-            () => this.getEnemiesInRange(12) >= 1 && me.hasVisibleAura("Dancing Rune Weapon"),
-            new bt.Selector(
-              this.drw_up(),
-              new bt.Action(() => bt.Status.Success)
-            )
+          spell.cast("Icebound Fortitude", on => me, req =>
+            (!me.hasVisibleAura(auras.dancing_rune_weapon) && !me.hasVisibleAura("Vampiric Blood") && me.pctHealth < Settings.JmrIBFSetting) || me.isStunned()
           ),
+          spell.cast("Lichborne", on => me, req => me.isFeared() || me.pctHealth < Settings.JmrLichborneSetting),
+
+          // --- high_prio_actions ---
+          spell.cast("Raise Dead", req => me.inCombat() && me.target),
+          spell.cast("Death Strike", on => this.getCurrentTarget(), req => {
+            const coag = me.getAura("Coagulopathy");
+            return coag && coag.remaining > 0 && coag.remaining <= 1500;
+          }),
+
+          // Vampiric Blood - max uptime
+          spell.cast("Vampiric Blood", on => me, req => !me.hasVisibleAura("Vampiric Blood")),
+
+          // Dancing Rune Weapon
+          spell.cast("Dancing Rune Weapon", req => this.shouldUseDRW()),
+
+          // Racials + Arcane Torrent + Trinkets
+          this.useRacials(),
+          spell.cast("Arcane Torrent", on => me, req => this.runicPowerDeficit() > 20),
+          common.useTrinkets(() => this.getCurrentTarget()),
+
+          // --- Hero tree rotation routing (melee range gated) ---
           new bt.Decorator(
             () => this.getEnemiesInRange(12) >= 1,
             new bt.Selector(
-              this.standard(),
-              new bt.Action(() => bt.Status.Success)
+              // San'layn during DRW (Gift of the San'layn window)
+              new bt.Decorator(
+                () => this.isSanlayn() && me.hasVisibleAura(auras.dancing_rune_weapon),
+                this.sanGift()
+              ),
+              // San'layn default (also fallback when sanGift can't cast anything)
+              new bt.Decorator(
+                () => this.isSanlayn(),
+                this.sanlayn()
+              ),
+              // Deathbringer
+              new bt.Decorator(
+                () => !this.isSanlayn(),
+                this.deathbringer()
+              ),
             )
           ),
         ),
@@ -273,63 +194,120 @@ export class DeathKnightBloodBehavior extends Behavior {
     );
   }
 
-  drw_up() {
+  // San'layn rotation during DRW (Gift of the San'layn window)
+  // During Gift/DRW, all Heart Strikes become Vampiric Strikes
+  sanGift() {
     return new bt.Selector(
-      spell.cast("Blood Boil", on => this.getCurrentTarget(), req => !this.getCurrentTarget().hasVisibleAuraByMe("Blood Plague")),
-      spell.cast("Tombstone", on => me, req => this.getAuraStacks("Bone Shield") > 5 && me.powerByType(PowerType.Runes) >= 2 && this.runicPowerDeficit() >= 30 && (!me.hasAura("Shattering Bone") || (me.hasAura("Shattering Bone") && me.hasVisibleAura("Death and Decay")))),
-      spell.cast("Death Strike", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Coagulopathy") || !me.hasVisibleAura("Icy Talons")),
-      spell.cast("Marrowrend", on => me, req => !me.hasVisibleAura("Bone Shield") || (me.hasVisibleAura("Bone Shield") && this.getAuraRemaining("Bone Shield") <= 4000 || this.getAuraStacks("Bone Shield") < this.bone_shield_refresh_value()) && this.runicPowerDeficit() > 20),
-      spell.cast("Soul Reaper", on => this.getCurrentTarget(), req => combat.targets.length === 1 && me.target.timeToDeath() > (me.target.hasVisibleAuraByMe("Soul Reaper") ? this.getDebuffRemainingTime("Soul Reaper") + 5000 : 5000)),
-      spell.cast("Soul Reaper", on => this.getCurrentTarget(), req => combat.targets.length >= 2 && me.target.timeToDeath() > (me.target.hasVisibleAuraByMe("Soul Reaper") ? this.getDebuffRemainingTime("Soul Reaper") + 5000 : 5000)),
-      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => (!me.hasVisibleAura("Death and Decay") && (me.hasAura("Sanguine Ground") || me.hasAura("Unholy Ground"))) && !me.isMoving()),
-      spell.cast("Blood Boil", on => this.getCurrentTarget(), req => me.getUnitsAroundCount(10) > 2 && spell.getCharges("Blood Boil") >= 1),
-      spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() <= this.heartStrikeRpDrw() || me.powerByType(PowerType.RunicPower) >= Settings.JmrDeathStrikeDumpAmount),
-      spell.cast("Consumption", on => this.getCurrentTarget(), req => this.getCurrentTarget() !== undefined),
-      spell.cast("Blood Boil", on => this.getCurrentTarget(), req => spell.getCharges("Blood Boil") >= 1 && this.getAuraStacks("Hemostasis") < 5),
-      spell.cast("Heart Strike", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Runes) >= 2 || this.runicPowerDeficit() >= this.heartStrikeRpDrw()),
+      // Death Strike at 75+ RP
+      spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() < 50),
+      // Bone Shield maintenance (at least 5 stacks)
+      spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
+        const bs = me.getAura("Bone Shield");
+        return !bs || bs.stacks < 5 || bs.remaining < 3000;
+      }),
+      // Blood Boil if DRW Blood Plague copy not ticking on target
+      spell.cast("Blood Boil", on => me, req => {
+        const target = this.getCurrentTarget();
+        return target && !target.hasVisibleAuraByMe(auras.blood_plague);
+      }),
+      // Death and Decay on Crimson Scourge proc
+      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => me.hasVisibleAura("Crimson Scourge")),
+      // Fill with Vampiric Strike
+      spell.cast("Vampiric Strike", on => this.getCurrentTarget()),
+      // Heart Strike fallback
+      spell.cast("Heart Strike", on => this.getCurrentTarget()),
+      // Out of runes — Blood Boil
+      spell.cast("Blood Boil", on => me),
     );
   }
 
-  standard() {
+  // San'layn rotation outside DRW
+  sanlayn() {
     return new bt.Selector(
-      spell.cast("Tombstone", on => me, req => this.getAuraStacks("Bone Shield") > 5 && me.powerByType(PowerType.Runes) >= 2 && this.runicPowerDeficit() >= 30 && (!me.hasAura("Shattering Bone") || (me.hasAura("Shattering Bone") && me.hasVisibleAura("Death and Decay"))) && spell.getCooldown("Dancing Rune Weapon").timeleft >= 25000),
-      spell.cast("Death Strike", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Coagulopathy") || !me.hasVisibleAura("Icy Talons") || me.powerByType(PowerType.RunicPower) >= Settings.JmrDeathStrikeDumpAmount || this.runicPowerDeficit() <= this.heartStrikeRp() || me.target.timeToDeath() < 10),
-      spell.cast("Death's Caress", on => this.getCurrentTarget(), req => (me.hasVisibleAura("Bone Shield") && this.getAuraRemaining("Bone Shield") <= 4000 || this.getAuraStacks("Bone Shield") < this.bone_shield_refresh_value() + 1) && this.runicPowerDeficit() > 10 && !(me.hasAura("Insatiable Blade") && spell.getCooldown("Dancing Rune Weapon").timeleft < this.getAuraRemaining("Bone Shield")) && !me.hasAura("Consumption") && !me.hasAura("Blooddrinker") && me.powerByType(PowerType.Runes) < 3),
-      spell.cast("Marrowrend", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Bone Shield") || (me.hasVisibleAura("Bone Shield") && this.getAuraRemaining("Bone Shield") <= 4000 || this.getAuraStacks("Bone Shield") < this.bone_shield_refresh_value()) && this.runicPowerDeficit() > 20 && !(me.hasAura("Insatiable Blade") && spell.getCooldown("Dancing Rune Weapon").timeleft < this.getAuraRemaining("Bone Shield"))),
-      spell.cast("Consumption", on => this.getCurrentTarget(), req => this.getCurrentTarget() !== undefined),
-      spell.cast("Soul Reaper", on => this.getCurrentTarget(), req => combat.targets.length === 1 && me.target.timeToDeath() > (me.target.hasVisibleAuraByMe("Soul Reaper") ? this.getDebuffRemainingTime("Soul Reaper") + 5000 : 5000)),
-      spell.cast("Soul Reaper", on => this.getCurrentTarget(), req => combat.targets.length >= 2 && me.target.timeToDeath() > (me.target.hasVisibleAuraByMe("Soul Reaper") ? this.getDebuffRemainingTime("Soul Reaper") + 5000 : 5000)),
-      spell.cast("Bonestorm", on => me, req => this.getAuraStacks("Bone Shield") >= 5),
-      spell.cast("Blood Boil", on => this.getCurrentTarget(), req => spell.getCharges("Blood Boil") >= 2 && (this.getAuraStacks("Hemostasis") <= (5 - me.getUnitsAroundCount(10)) || me.getUnitsAroundCount(10) > 2)),
-      spell.cast("Heart Strike", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Runes) >= 4),
-      spell.cast("Blood Boil", on => this.getCurrentTarget(), req => spell.getCharges("Blood Boil") >= 1 && this.getCurrentTarget()),
-      spell.cast("Heart Strike", on => this.getCurrentTarget() , req => me.powerByType(PowerType.Runes) > 1 && (me.powerByType(PowerType.Runes) >= 3 || this.getAuraStacks("Bone Shield") > 7)),
+      // Death Strike at 75+ RP
+      spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() < 50),
+      // Bone Shield emergency (about to expire, rune-efficient)
+      spell.cast("Death's Caress", on => this.getCurrentTarget(), req => {
+        const bs = me.getAura("Bone Shield");
+        return (!bs || bs.remaining < 3000 || bs.stacks <= 1) && me.powerByType(PowerType.Runes) < 4;
+      }),
+      // Bone Shield maintenance (at least 5 stacks, or about to expire)
+      spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
+        const bs = me.getAura("Bone Shield");
+        return !bs || bs.stacks < 5 || bs.remaining < 3000;
+      }),
+      // Death and Decay uptime or Crimson Scourge proc
+      spell.cast("Death and Decay", on => this.getCurrentTarget(), req =>
+        !me.hasVisibleAura("Death and Decay") || me.hasVisibleAura("Crimson Scourge")
+      ),
+      // Blood Boil with Boiling Point proc
+      spell.cast("Blood Boil", on => me, req => me.hasVisibleAura("Boiling Point")),
+      // Vampiric Strike when proc available
+      spell.cast("Vampiric Strike", on => this.getCurrentTarget(), req => me.hasAura(auras.vampiric_strike_proc)),
+      // Blood Boil to prevent charge capping
+      spell.cast("Blood Boil", on => me, req => spell.getCharges("Blood Boil") >= 2),
+      // Heart Strike filler
+      spell.cast("Heart Strike", on => this.getCurrentTarget()),
+    );
+  }
+
+  // Deathbringer rotation
+  deathbringer() {
+    return new bt.Selector(
+      // Death Strike at near-cap RP (lower threshold during DRW)
+      spell.cast("Death Strike", on => this.getCurrentTarget(), req =>
+        this.runicPowerDeficit() < 20 || (this.runicPowerDeficit() < 26 && me.hasVisibleAura(auras.dancing_rune_weapon))
+      ),
+      // Death and Decay uptime
+      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Death and Decay")),
+      // Reaper's Mark
+      spell.cast("Reaper's Mark", on => this.getCurrentTarget()),
+      // Marrowrend with Exterminate proc
+      spell.cast("Marrowrend", on => this.getCurrentTarget(), req => me.hasAura(auras.exterminate)),
+      // Death's Caress for Bone Shield (rune-efficient when low on runes)
+      spell.cast("Death's Caress", on => this.getCurrentTarget(), req => {
+        const bs = me.getAura("Bone Shield");
+        return (!bs || bs.remaining < 3000 || bs.stacks < 6) && me.powerByType(PowerType.Runes) < 4;
+      }),
+      // Marrowrend for Bone Shield maintenance
+      spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
+        const bs = me.getAura("Bone Shield");
+        return !bs || bs.remaining < 3000 || bs.stacks < 6;
+      }),
+      // Death Strike dump
+      spell.cast("Death Strike", on => this.getCurrentTarget()),
+      // Blood Boil
+      spell.cast("Blood Boil", on => me),
+      // Consumption (basic cast, not during DRW)
+      spell.cast("Consumption", on => this.getCurrentTarget(), req => !me.hasVisibleAura(auras.dancing_rune_weapon)),
+      // Heart Strike filler
+      spell.cast("Heart Strike", on => this.getCurrentTarget()),
+      // Consumption (lowest priority fallback)
+      spell.cast("Consumption", on => this.getCurrentTarget()),
+      // Arcane Torrent for RP
+      spell.cast("Arcane Torrent", on => me, req => this.runicPowerDeficit() > 20),
     );
   }
 
   shouldUseDRW() {
     const target = this.getCurrentTarget();
-    return target.timeToDeath() > Settings.JmrDRWTTD && !me.hasAura("Smothering Shadows");
+    if (!target) return false;
+    if (me.hasVisibleAura(auras.dancing_rune_weapon)) return false;
+    if (target.timeToDeath() < Settings.JmrDRWTTD) return false;
+    if (!this.isSanlayn()) {
+      if (me.hasAura(auras.exterminate)) return false;
+      if (target.hasAuraByMe("Reaper's Mark")) return false;
+    }
+    return true;
   }
 
-  // Racial abilities
   useRacials() {
     return new bt.Selector(
       spell.cast("Blood Fury", on => me, req => me.race === RaceType.Orc),
+      spell.cast("Berserking", on => me, req => me.race === RaceType.Troll),
+      spell.cast("Fireblood", on => me, req => me.race === RaceType.DarkIronDwarf),
+      spell.cast("Ancestral Call", on => me, req => me.race === RaceType.MagharOrc),
     );
-  }
-
-
-  bone_shield_refresh_value() {
-    return me.hasAura("Consumption") || me.hasAura("Blooddrinker") ? 4 : 5;
-  }
-
-  heartStrikeRpDrw() {
-    return 25 + me.getUnitsAroundCount(10) * (me.hasAura("Heartbreaker") ? 2 : 0);
-  }
-
-  heartStrikeRp() {
-    return 10 + me.getUnitsAroundCount(10) * (me.hasAura("Heartbreaker") ? 2 : 0);
   }
 
   runicPowerDeficit() {
@@ -337,7 +315,7 @@ export class DeathKnightBloodBehavior extends Behavior {
   }
 
   UnitsAroundMissingBloodPlague() {
-    return me.getUnitsAround(10).filter(unit => !unit.hasVisibleAuraByMe("Blood Plague")).length > 0;
+    return me.getUnitsAround(10).filter(unit => !unit.hasVisibleAuraByMe(auras.blood_plague)).length > 0;
   }
 
   getCurrentTarget() {

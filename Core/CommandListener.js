@@ -16,6 +16,7 @@ class CommandListener {
     };
     this.isBindingSlot = null;
     this.bindingModifiers = { ctrl: false, shift: false };
+    this._lastFailedTime = {};
   }
 
   getSlots() {
@@ -82,6 +83,69 @@ class CommandListener {
     }
   }
 
+  handleFailedCast(eventData) {
+    if (!me) return;
+    if (!eventData.source || !eventData.source.guid.equals(me.guid)) return;
+
+    const spellId = eventData.args?.[0];
+    if (!spellId) return;
+
+    const botCastTime = Spell._lastCastTimes?.get(spellId);
+    if (botCastTime && (wow.frameTime - botCastTime) < 500) return;
+
+    const spell = new wow.Spell(spellId);
+    if (!spell || !spell.name) return;
+
+    const now = wow.frameTime;
+    if (this._lastFailedTime[spellId] && (now - this._lastFailedTime[spellId]) < 500) {
+      return;
+    }
+    this._lastFailedTime[spellId] = now;
+
+    const spellName = spell.name.toLowerCase();
+
+    const knownSpell = Spell.getSpell(spellName);
+    if (!knownSpell || !knownSpell.isKnown) return;
+
+    if (knownSpell.cooldown && knownSpell.cooldown.timeleft > 1500) return;
+
+    const target = this.resolveTarget(eventData.destination, spellId);
+
+    const targetUnit = this.targetFunctions[target]?.();
+    if (!targetUnit) return;
+
+    this.addSpellToQueue({
+      target,
+      spellName,
+      spellId: knownSpell.id,
+      fromFailedCast: true
+    });
+  }
+
+  resolveTarget(destination, spellId) {
+    if (!destination || !destination.guid || destination.guid.toString() === "0:0 (0)") {
+      if (spellId) {
+        const spellInfo = new wow.Spell(spellId);
+        if (spellInfo && spellInfo.isHarmful) return "target";
+      }
+      return "me";
+    }
+
+    if (me.guid.equals(destination.guid)) {
+      return "me";
+    }
+
+    if (me.focusTarget && me.focusTarget.guid && destination.guid.equals(me.focusTarget.guid)) {
+      return "focus";
+    }
+
+    if (me.targetUnit && me.targetUnit.guid && destination.guid.equals(me.targetUnit.guid)) {
+      return "target";
+    }
+
+    return "target";
+  }
+
   queueFromSlot(slot) {
     const target = slot.target;
     const spellName = slot.spellName.toLowerCase();
@@ -107,31 +171,32 @@ class CommandListener {
       return;
     }
 
-    const added = this.addSpellToQueue({ target, spellName, spellId: spell.id });
-    if (added) {
-      console.info(`Queued spell: ${spellName} (ID: ${spell.id}) on ${target}`);
-    }
-
+    this.addSpellToQueue({ target, spellName, spellId: spell.id });
     this.processQueuedSpell();
   }
 
   addSpellToQueue(spellInfo) {
     if (this.spellQueue.some(spell => spell.spellId === spellInfo.spellId)) {
+      console.info(`[SpellQueue] Already queued: ${spellInfo.spellName} — skipping duplicate`);
       return false;
     }
     this.spellQueue.push({ ...spellInfo, timestamp: wow.frameTime });
+    console.info(`[SpellQueue] Added: ${spellInfo.spellName} (ID: ${spellInfo.spellId}) on ${spellInfo.target}${spellInfo.fromFailedCast ? " [failed cast]" : " [keybind]"}`);
     return true;
   }
 
   getNextQueuedSpell() {
     const currentTime = wow.frameTime;
-    const expirationTime = currentTime - (Settings.SpellQueueExpirationTimer || 5000);
+    const defaultExpiry = Settings.SpellQueueExpirationTimer || 5000;
+    const failedCastExpiry = 1800;
 
     this.spellQueue = this.spellQueue.filter(spell => {
-      if (spell.timestamp >= expirationTime) {
+      const expiry = spell.fromFailedCast ? failedCastExpiry : defaultExpiry;
+      if (spell.timestamp >= currentTime - expiry) {
         return true;
       }
-      console.info(`Removed expired queued spell: ${spell.spellName}`);
+      const age = ((currentTime - spell.timestamp) / 1000).toFixed(1);
+      console.info(`[SpellQueue] Expired: ${spell.spellName} on ${spell.target} after ${age}s`);
       return false;
     });
 
@@ -152,7 +217,15 @@ class CommandListener {
   }
 
   removeSpellFromQueue(spellName) {
+    const had = this.spellQueue.some(spell => spell.spellName === spellName);
     this.spellQueue = this.spellQueue.filter(spell => spell.spellName !== spellName);
+    if (had) console.info(`[SpellQueue] Removed: ${spellName}`);
+  }
+
+  clearQueue() {
+    if (this.spellQueue.length === 0) return;
+    console.info(`[SpellQueue] Cleared ${this.spellQueue.length} spell(s)`);
+    this.spellQueue.length = 0;
   }
 
   renderQueuedSpells() {
@@ -230,4 +303,17 @@ class CommandListener {
 }
 
 const commandListener = new CommandListener();
+
+class FailedCastListener extends wow.EventListener {
+  onEvent(event) {
+    if (event.name !== "COMBAT_LOG_EVENT_UNFILTERED") return;
+    const [eventData] = event.args;
+    if (eventData.eventType === 7) {
+      commandListener.handleFailedCast(eventData);
+    }
+  }
+}
+
+new FailedCastListener();
+
 export default commandListener;

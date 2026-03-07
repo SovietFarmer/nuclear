@@ -58,7 +58,7 @@ const SpellQueueDisplay = {
         }
 
         if (imgui.button("Clear Queue", { x: 100, y: 25 })) {
-          CommandListener.spellQueue.length = 0;
+          CommandListener.clearQueue();
         }
       }
     }

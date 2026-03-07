@@ -89,6 +89,11 @@ so you know what methods are actually available and how they work under the hood
   Prefer numeric IDs defined in a const auras = {} block at the top of the rotation file.
   Use string names only as fallback for unknown/new expansion aura IDs.
 - Spell casts always use string names: spell.cast("Spell Name", ...).
+- In Midnight (12.x), override spells (e.g. Vampiric Strike overriding Heart Strike) must
+  be cast by their OVERRIDE name, not the base spell name. getSpell() returns the base spell
+  which may not work for overrides. Use separate spell.cast() entries: try the override first,
+  then the base spell as fallback. Example: spell.cast("Vampiric Strike", ...) before
+  spell.cast("Heart Strike", ...) in a Selector.
 - Pet buffs must be checked on Pet.current, not on me.
 - New expansion aura IDs are unknown until verified. Use string name as fallback
   (e.g. me.hasAura("Tempest")) — do NOT use 0 as placeholder, it can match unexpectedly.
