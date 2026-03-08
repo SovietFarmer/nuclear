@@ -90,6 +90,7 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Putrefy", on => me.target, ret => me.target && spell.getCharges("Putrefy") >= 3),
       spell.cast("Putrefy", on => me.target, ret => me.target &&
         spell.getCharges("Putrefy") >= 2 && !this.burstSoon()),
+      spell.cast("Soul Reaper", on => me.target, ret => !!me.target),
       spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
       spell.cast("Death Coil", on => me.target, ret => me.target && (me.power > 80 || me.hasAura(auras.suddenDoom))),
       spell.cast("Scourge Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() >= 3),
@@ -106,6 +107,7 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Putrefy", on => me.target, ret => me.target && spell.getCharges("Putrefy") >= 3),
       spell.cast("Putrefy", on => me.target, ret => me.target &&
         spell.getCharges("Putrefy") >= 2 && !this.burstSoon()),
+      spell.cast("Soul Reaper", on => me.target, ret => !!me.target),
       spell.cast("Festering Scythe", on => me.target, ret => me.hasAura(auras.festeringScythe)),
       spell.cast("Necrotic Coil", on => me.target, ret => me.target && (me.power > 80 || me.hasAura(auras.suddenDoom))),
       spell.cast("Scourge Strike", on => me.target, ret => me.target && this.getLesserGhoulStacks() >= 3),
