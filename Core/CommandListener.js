@@ -85,6 +85,7 @@ class CommandListener {
 
   handleFailedCast(eventData) {
     if (!me) return;
+    if (me.isMounted) return;
     if (!eventData.source || !eventData.source.guid.equals(me.guid)) return;
 
     const spellId = eventData.args?.[0];
