@@ -168,6 +168,53 @@ const herbs = {
   527488: "herb",   // phantom-bloom
   527489: "herb",   // lush-phantom-bloom
 
+  // Midnight (12.0 expansion - Quel'Thalas/Eversong & surrounding zones)
+  // Herbs (base nodes + Lush + themed variants: Lightfused, Wild, Primal, Voidbound + Transplanted variants)
+  516932: "herb",   // Tranquility Bloom
+  516988: "herb",   // Lush Tranquility Bloom
+  516967: "herb",   // Lightfused Tranquility Bloom
+  516968: "herb",   // Wild Tranquility Bloom
+  516973: "herb",   // Primal Tranquility Bloom
+  516979: "herb",   // Voidbound Tranquility Bloom
+  612102: "herb",   // Transplanted Tranquility Bloom
+  612112: "herb",   // Transplanted Lush Tranquility Bloom
+
+  516936: "herb",   // Argentleaf
+  516985: "herb",   // Lush Argentleaf
+  516964: "herb",   // Lightfused Argentleaf
+  516971: "herb",   // Wild Argentleaf
+  516976: "herb",   // Primal Argentleaf
+  516982: "herb",   // Voidbound Argentleaf
+  612101: "herb",   // Transplanted Argentleaf
+  612111: "herb",   // Transplanted Lush Argentleaf
+
+  516935: "herb",   // Azeroot
+  516986: "herb",   // Lush Azeroot
+  516965: "herb",   // Lightfused Azeroot
+  516970: "herb",   // Wild Azeroot
+  516975: "herb",   // Primal Azeroot (pattern match)
+  516981: "herb",   // Voidbound Azeroot
+  612104: "herb",   // Transplanted Azeroot
+  612114: "herb",   // Transplanted Lush Azeroot
+
+  516937: "herb",   // Mana Lily
+  516984: "herb",   // Lush Mana Lily
+  516963: "herb",   // Lightfused Mana Lily
+  516972: "herb",   // Wild Mana Lily
+  516977: "herb",   // Primal Mana Lily
+  516983: "herb",   // Voidbound Mana Lily
+  612103: "herb",   // Transplanted Mana Lily
+  612113: "herb",   // Transplanted Lush Mana Lily
+
+  516934: "herb",   // Sanguithorn
+  516987: "herb",   // Lush Sanguithorn
+  516966: "herb",   // Lightfused Sanguithorn
+  516969: "herb",   // Wild Sanguithorn
+  516974: "herb",   // Primal Sanguithorn
+  516980: "herb",   // Voidbound Sanguithorn
+  612105: "herb",   // Transplanted Sanguithorn
+  612115: "herb",   // Transplanted Lush Sanguithorn
+
 };
 
 const ores = {
@@ -280,6 +327,27 @@ const ores = {
   452083: "vein",   // Ironclaw
   523491: "vein",   // desolate-deposit
   523512: "vein",   // rich-desolate-deposit
+
+  // Midnight Veins/Mines (base + Rich + Seam + themed variants: Lightfused, Primal, Voidbound, Wild)
+  523281: "vein",   // Refulgent Copper
+  523282: "vein",   // Rich Refulgent Copper
+  523283: "vein",   // Refulgent Copper Seam
+  523284: "vein",   // Lightfused Refulgent Copper
+  523285: "vein",   // Primal Refulgent Copper
+  523287: "vein",   // Voidbound Refulgent Copper
+
+  523288: "vein",   // Umbral Tin
+  523289: "vein",   // Rich Umbral Tin
+  523290: "vein",   // Umbral Tin Seam
+  523291: "vein",   // Primal Umbral Tin
+  523294: "vein",   // Lightfused Umbral Tin
+  523293: "vein",   // Voidbound Umbral Tin
+
+  523295: "vein",   // Brilliant Silver
+  523297: "vein",   // Rich Brilliant Silver
+  523298: "vein",   // Brilliant Silver Seam
+  523299: "vein",   // Primal Brilliant Silver
+  523301: "vein",   // Voidbound Brilliant Silver
 };
 
 const treasures = {
@@ -356,6 +424,8 @@ const treasures = {
 
   // Midnight 12.0
   584752: "treasure", // Mislaid curiosity
+  539047: "treasure", // Abandoned Ritual Skull
+  539049: "treasure", // Bait
 };
 
 export default { herb: herbs, ore: ores, treasure: treasures };
