@@ -23,7 +23,6 @@ const auras = {
   wildGrowth: 48438,
   efflorescence: 81262,
   efflorescenceAura: 145205, // Visible aura when Efflorescence is active
-  cenarionWard: 102351,
   omenOfClarity: 16870,
   clearcasting: 16870,
   soulOfTheForest: 114108,
@@ -39,7 +38,6 @@ const auras = {
   photosynthesis: 274902,
   verdantInfusion: 392410,
   rampantGrowth: 404521,
-  groveGuardians: 102693,
 
   // Forms
   catForm: 768,
@@ -75,7 +73,11 @@ const auras = {
   fluidForm: 449193,
   heartOfTheWild: 319454,
   naturesVigil: 124974,
-  undergrowth: 392301
+  undergrowth: 392301,
+
+  // Midnight talents
+  everbloom: "Everbloom",
+  lifetreading: 1217941
 };
 
 export class JmrRestoDruidBehavior extends Behavior {
@@ -99,8 +101,6 @@ export class JmrRestoDruidBehavior extends Behavior {
   rampToggleTime = 0;
   lastRampTextError = 0;
   lastEfflorescenceCheck = 0;
-  groveGuardianUsedThisRamp = false;
-
   // Burst system state
   burstModeActive = false;
   burstToggleTime = 0;
@@ -150,7 +150,7 @@ export class JmrRestoDruidBehavior extends Behavior {
         { type: "checkbox", uid: "UseWildGrowthHealing", text: "Use Wild Growth for Normal Healing", default: true },
         { type: "slider", uid: "WildGrowthHealingHealthPct", text: "Wild Growth Healing Health %", min: 0, max: 100, default: 90 },
         { type: "slider", uid: "WildGrowthHealingMinTargets", text: "Wild Growth Healing Min Targets", min: 1, max: 5, default: 3 },
-        { type: "slider", uid: "SwiftmendHealthPct", text: "Swiftmend Health %", min: 0, max: 90, default: 65 },
+        { type: "slider", uid: "SwiftmendHealthPct", text: "Swiftmend Health %", min: 0, max: 100, default: 90 },
         { type: "checkbox", uid: "UseNatureSwiftness", text: "Use Nature's Swiftness", default: true },
         { type: "slider", uid: "NatureSwiftnessHealthPct", text: "Nature's Swiftness Health %", min: 0, max: 90, default: 50 }
       ]
@@ -158,26 +158,25 @@ export class JmrRestoDruidBehavior extends Behavior {
     {
       header: "HoT Management",
       options: [
-        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom", default: false },
+        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom", default: true },
         { type: "checkbox", uid: "PrioritizeLifebloomOnTanks", text: "Prioritize Lifebloom on Tanks", default: false },
         { type: "checkbox", uid: "UseLifebloomHealing", text: "Use Lifebloom for Normal Healing", default: true },
         { type: "slider", uid: "LifebloomHealingHealthPct", text: "Lifebloom Healing Health %", min: 0, max: 95, default: 90 },
-        { type: "checkbox", uid: "MaintainEfflorescence", text: "Maintain Efflorescence", default: true },
+        { type: "checkbox", uid: "MaintainEfflorescence", text: "Maintain Efflorescence (manual, auto-skipped with Lifetreading)", default: true },
         { type: "slider", uid: "EfflorescenceMinTargets", text: "Efflorescence Min Targets", min: 1, max: 5, default: 2 },
-        { type: "checkbox", uid: "UseCenarionWard", text: "Use Cenarion Ward", default: true },
         { type: "checkbox", uid: "SpreadRejuvenation", text: "Use Rejuvenation for Normal Healing", default: true },
-        { type: "checkbox", uid: "UseGroveGuardians", text: "Use Grove Guardians", default: true },
-        { type: "slider", uid: "GroveGuardiansHealthPct", text: "Grove Guardians Health %", min: 0, max: 95, default: 80 },
         { type: "checkbox", uid: "MaintainMarkOfTheWild", text: "Maintain Mark of the Wild", default: true }
       ]
     },
     {
       header: "Cooldowns & Utilities",
       options: [
-        { type: "checkbox", uid: "UseConvoke", text: "Use Convoke the Spirits", default: true },
+        { type: "checkbox", uid: "UseConvoke", text: "Use Convoke the Spirits (Healing)", default: true },
         { type: "slider", uid: "ConvokeHealthPct", text: "Convoke Health %", min: 0, max: 90, default: 70 },
         { type: "slider", uid: "ConvokeMinTargets", text: "Convoke Min Targets", min: 1, max: 5, default: 3 },
-        { type: "checkbox", uid: "UseGroveGuardians", text: "Use Grove Guardians", default: true },
+        { type: "checkbox", uid: "UseIncarnation", text: "Use Incarnation: Tree of Life", default: false },
+        { type: "slider", uid: "IncarnationHealthPct", text: "Incarnation Health %", min: 0, max: 95, default: 80 },
+        { type: "slider", uid: "IncarnationMinTargets", text: "Incarnation Min Targets", min: 1, max: 5, default: 3 },
         { type: "checkbox", uid: "UseInnervate", text: "Use Innervate", default: true },
         { type: "slider", uid: "InnervateManaPercent", text: "Innervate Mana %", min: 0, max: 95, default: 85 },
         { type: "checkbox", uid: "UseIronbark", text: "Use Ironbark", default: true },
@@ -201,7 +200,7 @@ export class JmrRestoDruidBehavior extends Behavior {
         { type: "checkbox", uid: "EnableDPS", text: "Enable DPS", default: true },
         { type: "checkbox", uid: "MaintainSunfire", text: "Maintain Sunfire", default: true },
         { type: "slider", uid: "SunfireMinTTD", text: "Sunfire Min Time to Death (seconds)", min: 3, max: 30, default: 8 },
-        { type: "checkbox", uid: "MaintainMoonfire", text: "Maintain Moonfire", default: true },
+        { type: "checkbox", uid: "MaintainMoonfire", text: "Maintain Moonfire", default: false },
         { type: "slider", uid: "MoonfireMinTTD", text: "Moonfire Min Time to Death (seconds)", min: 5, max: 60, default: 15 },
         { type: "checkbox", uid: "UseCatWeaving", text: "Use Cat Weaving", default: true },
         { type: "checkbox", uid: "RespectRakeTTD", text: "Respect Rake Time to Death", default: true },
@@ -215,7 +214,6 @@ export class JmrRestoDruidBehavior extends Behavior {
         { type: "slider", uid: "MinCatFormDuration", text: "Min Cat Form Duration (ms)", min: 0, max: 10000, default: 4500 },
         { type: "slider", uid: "EmergencyHealingCooldown", text: "Emergency Healing Cooldown (ms)", min: 0, max: 15000, default: 8000 },
         //{ type: "slider", uid: "ShredEnergyThreshold", text: "Shred Energy Threshold", min: 0, max: 100, default: 50 },
-        { type: "checkbox", uid: "UseSkullBash", text: "Use Skull Bash (Interrupt)", default: true },
         { type: "checkbox", uid: "CatWeavingDebug", text: "Cat Weaving Debug", default: false },
         { type: "checkbox", uid: "UseHeartOfTheWild", text: "Use Heart of the Wild (DPS)", default: true },
         { type: "checkbox", uid: "UseConvokeForDPS", text: "Use Convoke the Spirits (DPS)", default: true },
@@ -516,7 +514,6 @@ export class JmrRestoDruidBehavior extends Behavior {
         if (friendsNeedingHealing.length >= Settings.RampEmergencyExitCount) {
           this.rampModeActive = false;
           this.rampStartTime = 0;
-          this.groveGuardianUsedThisRamp = false; // Reset counter on emergency exit
           return bt.Status.Success;
         }
         return bt.Status.Failure;
@@ -524,134 +521,94 @@ export class JmrRestoDruidBehavior extends Behavior {
 
       // Ramp sequence (specific order and logic)
 
-      // 1. Wild Growth (regardless of health)
-      spell.cast("Wild Growth", req => !me.isMoving() || me.hasVisibleAura("Nature's Swiftness")),
-
-      // 2. Lifebloom during ramp (respects global Lifebloom limits)
-      spell.cast("Lifebloom", on => this.getRampLifebloomTarget(), req =>
-        this.getRampLifebloomTarget() !== null
+      // 1. Incarnation: Tree of Life at ramp START for 30% Rejuv mana discount + 40% Rejuv healing
+      spell.cast("Incarnation: Tree of Life", req =>
+        Settings.UseIncarnation &&
+        spell.isSpellKnown("Incarnation: Tree of Life") &&
+        !spell.isOnCooldown("Incarnation: Tree of Life")
       ),
 
-      // 4. Rejuvenation priority spread (specific order)
+      // 2. Innervate early in ramp to make it free
+      spell.cast("Innervate", req =>
+        Settings.UseInnervate &&
+        spell.isSpellKnown("Innervate") &&
+        !spell.isOnCooldown("Innervate")
+      ),
 
-      // 4a. Non-tank without Lifebloom (highest priority)
+      // 3. Wild Growth (regardless of health -- procs Grove Guardians passively)
+      spell.cast("Wild Growth", req => !me.isMoving() || me.hasVisibleAura("Nature's Swiftness")),
+
+      // 4. Lifebloom during ramp (respects global Lifebloom limits)
+      spell.cast("Lifebloom", on => this.getRampLifebloomTarget(), req =>
+        this.getRampLifebloomTarget() !== null &&
+        spell.getTimeSinceLastCast("Lifebloom") > 5000
+      ),
+
+      // 5. Rejuvenation priority spread (buffed by Incarnation if active)
+
+      // 5a. Non-tank without Lifebloom (highest priority)
       spell.cast("Rejuvenation", on => this.getRampRejuvTarget1(), req =>
         this.getRampRejuvTarget1() !== null
       ),
 
-      // 4b. Me (if I don't have Rejuvenation)
+      // 5b. Me (if I don't have Rejuvenation)
       spell.cast("Rejuvenation", on => me, req =>
         !me.hasVisibleAuraByMe(auras.rejuvenation)
       ),
 
-      // 4c. Any tank without Rejuvenation
+      // 5c. Any tank without Rejuvenation
       spell.cast("Rejuvenation", on => this.getRampRejuvTarget3(), req =>
         this.getRampRejuvTarget3() !== null
       ),
 
-      // 4d. Lowest health friend without Rejuvenation
+      // 5d. Lowest health friend without Rejuvenation
       spell.cast("Rejuvenation", on => this.getRampRejuvTarget4(), req =>
         this.getRampRejuvTarget4() !== null
       ),
 
-      // 4e. Anyone without Rejuvenation (fallback)
+      // 5e. Anyone without Rejuvenation (fallback)
       spell.cast("Rejuvenation", on => this.getRampRejuvTarget5(), req =>
         this.getRampRejuvTarget5() !== null
       ),
 
-      // 5. Grove Guardian (limit 1 per ramp cycle)
-      new bt.Sequence(
-        spell.cast("Grove Guardians", on => this.getRampGroveGuardianTarget(), req =>
-          Settings.UseGroveGuardians &&
-          !this.groveGuardianUsedThisRamp &&
-          spell.getCharges("Grove Guardians") > 0 &&
-          this.getRampGroveGuardianTarget() !== null
-        ),
-        new bt.Action(() => {
-          this.groveGuardianUsedThisRamp = true;
-          return bt.Status.Success;
-        })
-      )
+      // 6. Swiftmend to proc Power of the Archdruid + Grove Guardians (passive)
+      spell.cast("Swiftmend", on => this.getSwiftmendTarget(), req =>
+        this.getSwiftmendTarget() !== null
+      ),
+
+      // 7. Convoke as ramp payoff (50% mini-Flourish extends HoTs, spawns Grove Guardians)
+      spell.cast("Convoke the Spirits", req =>
+        Settings.UseConvoke &&
+        spell.isSpellKnown("Convoke the Spirits") &&
+        !me.hasVisibleAura(auras.catForm) &&
+        !spell.isOnCooldown("Convoke the Spirits")
+      ),
+
+      // 8. Regrowth spam while Abundance stacks are high (100% crit, near-free mana)
+      // Instant-cast during Incarnation: Tree of Life
+      spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
+        this.getRegrowthTarget() !== null &&
+        this.getAbundanceStacks() >= 5 &&
+        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness") || me.hasAura("Incarnation: Tree of Life"))
+      ),
     );
   }
 
   buildInterrupts() {
     return new bt.Selector(
-      // AoE interrupt for multiple casters (3+ enemies casting within 10y)
-    //   new bt.Decorator(
-    //     () => Settings.UseIncapacitatingRoar &&
-    //          !spell.getCooldown("Skull Bash").ready &&
-    //          this.getCastingEnemiesInRange(10) >= 3,
-    //     new bt.Selector(
-    //       // Cast Incapacitating Roar if ready
-    //       new bt.Decorator(
-    //         () => spell.getCooldown("Incapacitating Roar").ready,
-    //         spell.cast("Incapacitating Roar"),
-    //         new bt.Action(() => bt.Status.Success)
-    //       ),
+      // Incapacitating Roar for AoE interrupt (3+ enemies casting within 10y)
+      new bt.Decorator(
+        () => Settings.UseIncapacitatingRoar &&
+              this.getCastingEnemiesInRange(10) >= 3,
+        spell.interrupt("Incapacitating Roar", false, 10)
+      ),
 
-    //       // Handle form switching after Incapacitating Roar
-    //       new bt.Decorator(
-    //         () => spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Incapacitating Roar") !== undefined,
-    //         new bt.Action(() => {
-    //           me.forceUpdateAuras();
-    //           let aura = me.hasVisibleAura("Bear Form") ? me.getAura("Bear Form") : null;
-    //           if (aura) {
-    //             me.cancelAura(aura.spellId);
-    //           }
-    //           return bt.Status.Success;
-    //         })
-    //       ),
-
-    //       new bt.Action(() => bt.Status.Success)
-    //     )
-    //   ),
-
-    //   // Single target interrupt fallback when Skull Bash not ready
-    //   new bt.Decorator(
-    //     () => Settings.UseMightyBash &&
-    //          !spell.getCooldown("Skull Bash").ready &&
-    //          this.getCastingEnemiesInRange(10) >= 1,
-    //     spell.interrupt("Mighty Bash"),
-    //     new bt.Action(() => bt.Status.Success)
-    //   ),
-
-      // Skull Bash interrupt with form management
-    //   new bt.Decorator(
-    //     () => true,
-    //     new bt.Selector(
-    //       // Cast Skull Bash if ready
-    //       new bt.Decorator(
-    //         () => spell.getCooldown("Skull Bash").ready,
-    //         spell.interrupt("Skull Bash"),
-    //         new bt.Action(() => bt.Status.Success)
-    //       ),
-
-    //       // Handle form switching after Skull Bash
-    //       new bt.Decorator(
-    //         () => spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Skull Bash") !== undefined,
-    //         new bt.Action(() => {
-    //           let aura = me.hasVisibleAura("Bear Form") ? me.getAura("Bear Form") :
-    //                      me.hasVisibleAura("Cat Form") ? me.getAura("Cat Form") : null;
-    //           if (aura) {
-    //             me.cancelAura(aura.spellId);
-    //           }
-    //           return bt.Status.Success;
-    //         })
-    //       ),
-
-    //       new bt.Action(() => bt.Status.Success)
-    //     )
-    //   ),
-     // Incapacitating Roar for AoE interrupt (3+ enemies casting within 10y)
-     new bt.Decorator(
-       () => Settings.UseIncapacitatingRoar &&
-             this.getCastingEnemiesInRange(10) >= 3 &&
-             this.shouldInterruptNow(),
-       spell.interrupt("Incapacitating Roar", false, 10)
-     ),
-
-     spell.interrupt("Skull Bash", false, 4),
+      // Mighty Bash single-target interrupt
+      new bt.Decorator(
+        () => Settings.UseMightyBash &&
+              spell.isSpellKnown("Mighty Bash"),
+        spell.interrupt("Mighty Bash", false, 5)
+      ),
     );
   }
 
@@ -660,20 +617,32 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Nature's Vigil for DPS (when we have HoTs active)
       spell.cast("Nature's Vigil", () =>
         Settings.UseNaturesVigil &&
+        spell.isSpellKnown("Nature's Vigil") &&
         this.hasActiveHoTs() &&
         this.getCurrentTarget() !== null &&
         this.shouldUseBurstAbility()
       ),
 
-      // Convoke the Spirits
+      // Incarnation: Tree of Life (alternative to Convoke -- use before ramping for cheap Rejuvs)
+      spell.cast("Incarnation: Tree of Life", () =>
+        Settings.UseIncarnation &&
+        spell.isSpellKnown("Incarnation: Tree of Life") &&
+        !me.hasVisibleAura(auras.catForm) &&
+        this.getFriendsUnderHealthPercent(Settings.IncarnationHealthPct).length >= Settings.IncarnationMinTargets
+      ),
+
+      // Convoke the Spirits (caster form for healing)
       spell.cast("Convoke the Spirits", () =>
         Settings.UseConvoke &&
+        spell.isSpellKnown("Convoke the Spirits") &&
+        !me.hasVisibleAura(auras.catForm) &&
         this.getFriendsUnderHealthPercent(Settings.ConvokeHealthPct).length >= Settings.ConvokeMinTargets
       ),
 
       // Innervate
       spell.cast("Innervate", () =>
         Settings.UseInnervate &&
+        spell.isSpellKnown("Innervate") &&
         (me.powerByType(PowerType.Mana) / me.maxPowerByType(PowerType.Mana) * 100) <= Settings.InnervateManaPercent
       ),
 
@@ -687,8 +656,9 @@ export class JmrRestoDruidBehavior extends Behavior {
 
   buildHealingRotation() {
     return new bt.Selector(
-      // Smart Efflorescence placement (cast when needed or better position available)
+      // With Lifetreading talented, Efflorescence auto-attaches to Lifebloom target -- skip manual placement
       spell.cast("Efflorescence", on => this.getBestEfflorescenceTarget(), req =>
+        !me.hasAura(auras.lifetreading) &&
         Settings.MaintainEfflorescence &&
         Settings.UseEfflorescence &&
         this.getBestEfflorescenceTarget() !== null &&
@@ -697,37 +667,36 @@ export class JmrRestoDruidBehavior extends Behavior {
         (!this.hasEfflorescenceActive() || this.shouldRecastEfflorescence())
       ),
 
-
-
-      // Maintain Lifebloom
+      // Maintain Lifebloom (critical with Everbloom -- also maintains Efflorescence via Lifetreading)
       spell.cast("Lifebloom", on => this.getLifebloomTarget(), req =>
         Settings.MaintainLifebloom &&
-        this.getLifebloomTarget() !== null
+        this.getLifebloomTarget() !== null &&
+        spell.getTimeSinceLastCast("Lifebloom") > 5000
       ),
 
-      // Wild Growth for healing (when multiple friends need healing)
+      // Swiftmend on CD -- procs Power of the Archdruid (2 free Rejuvs) and Grove Guardians (passive)
+      // Verdant Infusion extends HoTs on target; prefer Lifebloom target with Everbloom
+      spell.cast("Swiftmend", on => this.getSwiftmendTarget(), req =>
+        this.getSwiftmendTarget() !== null
+      ),
+
+      // Wild Growth for healing (procs Grove Guardians passively)
       spell.cast("Wild Growth", () =>
         Settings.UseWildGrowthHealing &&
         this.getFriendsUnderHealthPercent(Settings.WildGrowthHealingHealthPct).length >= Settings.WildGrowthHealingMinTargets &&
         (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
       ),
 
-      // Cenarion Ward
-      spell.cast("Cenarion Ward", on => this.getCenarionWardTarget(), req =>
-        Settings.UseCenarionWard &&
-        this.getCenarionWardTarget() !== null
-      ),
-
-      // Grove Guardians (normal healing)
-      spell.cast("Grove Guardians", on => this.getGroveGuardiansTarget(), req =>
-        Settings.UseGroveGuardians &&
-        spell.getCharges("Grove Guardians") > 0 &&
-        this.getGroveGuardiansTarget() !== null
-      ),
-
-      // Regrowth with Omen of Clarity
+      // Regrowth with Omen of Clarity (free cast)
       spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
         me.hasAura(auras.omenOfClarity) &&
+        this.getRegrowthTarget() !== null &&
+        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
+      ),
+
+      // Regrowth with high Abundance stacks (100% crit, near-free mana)
+      spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
+        this.getAbundanceStacks() >= 8 &&
         this.getRegrowthTarget() !== null &&
         (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
       ),
@@ -741,7 +710,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Lifebloom as regular heal (separate from maintenance)
       spell.cast("Lifebloom", on => this.getLifebloomHealingTarget(), req =>
         Settings.UseLifebloomHealing &&
-        this.getLifebloomHealingTarget() !== null
+        this.getLifebloomHealingTarget() !== null &&
+        spell.getTimeSinceLastCast("Lifebloom") > 5000
       ),
 
       // Regular Regrowth
@@ -819,30 +789,6 @@ export class JmrRestoDruidBehavior extends Behavior {
 
   buildCatDPSRotation() {
     return new bt.Selector(
-      // Debug logging
-      new bt.Action(() => {
-        if (Settings.CatWeavingDebug) {
-          const target = this.getCurrentTarget();
-        //   console.info(`[RestoDruid] Cat DPS Debug:`);
-        //   console.info(`  - In Cat Form: ${me.hasVisibleAura(auras.catForm)}`);
-        //   console.info(`  - Energy: ${me.powerByType(PowerType.Energy)}/${me.maxPowerByType(PowerType.Energy)}`);
-        //   console.info(`  - Combo Points: ${me.powerByType(PowerType.ComboPoints)}/5`);
-        //   console.info(`  - Heart of the Wild: ${me.hasVisibleAura(auras.heartOfTheWild)}`);
-        //   console.info(`  - Prowl: ${me.hasVisibleAura(auras.prowl)}`);
-        //   console.info(`  - In Combat: ${me.inCombat()}`);
-        //   console.info(`  - TTD: ${this.getTimeToDeath(target)}`);
-        //   console.info(`  - Energy Threshold: ${Settings.CatFormEnergyThreshold}`);
-        //   console.info(`  - Should Exit Cat Form: ${me.powerByType(PowerType.Energy) < Settings.CatFormEnergyThreshold}`);
-          if (target) {
-            // console.info(`  - Target: ${target.unsafeName}`);
-            // console.info(`  - Distance: ${me.distanceTo(target).toFixed(1)}y`);
-            // console.info(`  - Has Rake: ${target.hasVisibleAuraByMe("Rake")}`);
-            // console.info(`  - Has Rip: ${target.hasVisibleAuraByMe("Rip")}`);
-          }
-        }
-        return bt.Status.Failure;
-      }),
-
       // HIGHEST PRIORITY: Spend 5 combo points on finishers before doing anything else
       new bt.Decorator(
         () => me.hasVisibleAura(auras.catForm) && this.shouldSpendComboPointsBeforeExitingCat(),
@@ -892,8 +838,9 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Heart of the Wild in cat form (if Convoke CD < 40s or no Convoke talent)
       spell.cast("Heart of the Wild", () =>
         Settings.UseHeartOfTheWild &&
+        spell.isSpellKnown("Heart of the Wild") &&
         me.hasVisibleAura(auras.catForm) &&
-        (spell.getCooldown("Convoke the Spirits").timeleft < 40000 || !Settings.UseConvokeForDPS) &&
+        (!spell.isSpellKnown("Convoke the Spirits") || spell.getCooldown("Convoke the Spirits").timeleft < 40000 || !Settings.UseConvokeForDPS) &&
         this.getEnemiesInRange(6) >= 1 &&
         this.shouldUseBurstAbility()
       ),
@@ -904,8 +851,10 @@ export class JmrRestoDruidBehavior extends Behavior {
                this.getEnemiesInRange(40) <= 6 &&
                !me.hasVisibleAura(auras.catForm) &&
                !me.hasVisibleAura(432031) &&
+               spell.isSpellKnown("Convoke the Spirits") &&
                spell.getCooldown("Convoke the Spirits").timeleft <= 1500 &&
                (me.hasVisibleAura(auras.heartOfTheWild) ||
+                !spell.isSpellKnown("Heart of the Wild") ||
                 spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
                 !Settings.UseHeartOfTheWild) &&
                this.hasTalent("Fluid Form") &&
@@ -931,8 +880,10 @@ export class JmrRestoDruidBehavior extends Behavior {
           !me.hasVisibleAura(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
+          spell.isSpellKnown("Convoke the Spirits") &&
           spell.getCooldown("Convoke the Spirits").timeleft <= 1500 &&
           (me.hasVisibleAura(auras.heartOfTheWild) ||
+           !spell.isSpellKnown("Heart of the Wild") ||
            spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
            !Settings.UseHeartOfTheWild) &&
           (!this.hasTalent("Fluid Form") || !this.shouldCastRakeNext() || !this.isRakeTargetInMelee())
@@ -947,8 +898,10 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Convoke the Spirits in cat form
       spell.cast("Convoke the Spirits", () =>
         Settings.UseConvokeForDPS &&
+        spell.isSpellKnown("Convoke the Spirits") &&
         me.hasVisibleAura(auras.catForm) &&
         (me.hasVisibleAura(auras.heartOfTheWild) ||
+         !spell.isSpellKnown("Heart of the Wild") ||
          spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
          !Settings.UseHeartOfTheWild) &&
         this.getEnemiesInRange(6) >= 1 &&
@@ -978,59 +931,8 @@ export class JmrRestoDruidBehavior extends Behavior {
         })
       ),
 
-      // Moonfire DoT maintenance (not right after cat form, <4 swipe targets)
-      spell.cast("Moonfire", on => this.getCurrentTarget(), req =>
-        this.getCurrentTarget() !== null &&
-        this.getTimeToDeath(this.getCurrentTarget()) >= (Settings.MoonfireMinTTD * 1000) &&
-        this.getEnemiesInRange(8) < 4 &&
-        (!this.getCurrentTarget().getAuraByMe(auras.moonfire) || this.getCurrentTarget().getAuraByMe(auras.moonfire).remaining < 12000) &&
-        !this.wasLastSpell("Cat Form")
-      ),
-
-      // Sunfire DoT (not right after cat form)
-      spell.cast("Sunfire", on => this.getCurrentTarget(), req =>
-        this.getCurrentTarget() !== null &&
-        this.getTimeToDeath(this.getCurrentTarget()) >= (Settings.SunfireMinTTD * 1000) &&
-            (!this.getCurrentTarget().getAuraByMe(auras.sunfire) || this.getCurrentTarget().getAuraByMe(auras.sunfire).remaining < 5000) &&
-        !this.wasLastSpell("Cat Form")
-      ),
-
-      // Debug multi-target DoT logic
-      new bt.Action(() => {
-        if (Settings.CatWeavingDebug) {
-          const currentTarget = this.getCurrentTarget();
-          const rakeTarget = this.getRakeTarget();
-          const ripTarget = this.getRipTarget();
-
-          if (currentTarget && me.hasVisibleAura(auras.catForm)) {
-            // console.info(`[RestoDruid] DoT Target Debug:`);
-            // console.info(`  - Current Target: ${currentTarget.unsafeName}`);
-            // console.info(`  - Rake Target: ${rakeTarget?.unsafeName || 'None'}`);
-            // console.info(`  - Rip Target: ${ripTarget?.unsafeName || 'None'}`);
-            // console.info(`  - Moonfire Target: ${this.getMoonfireTarget()?.unsafeName || 'None'}`);
-            // console.info(`  - Sunfire Target: ${this.getSunfireTarget()?.unsafeName || 'None'}`);
-
-            // Show all units and their DoT status (including dummies)
-            const units = me.getUnitsAround(5).filter(unit =>
-              unit && !unit.deadOrGhost && me.canAttack(unit)
-            );
-            // console.info(`  - Units in range: ${units.length} (combat.targets: ${combat.targets.length})`);
-            units.forEach(unit => {
-              const rakeAura = unit.getAuraByMe("Rake");
-              const ripAura = unit.getAuraByMe("Rip");
-              const hasRake = rakeAura !== null;
-              const hasRip = ripAura !== null;
-              const rakeTime = rakeAura ? rakeAura.remaining : 0;
-              const ripTime = ripAura ? ripAura.remaining : 0;
-              const facing = me.isFacing(unit);
-              const canAttack = me.canAttack(unit);
-              const inCombat = me.inCombatWith(unit);
-            // console.info(`    * ${unit.unsafeName}: Rake=${hasRake}(${rakeTime}), Rip=${hasRip}(${ripTime}), Facing=${facing}, CanAttack=${canAttack}, InCombat=${inCombat}`);
-            });
-          }
-        }
-        return bt.Status.Failure;
-      }),
+      // Moonfire/Sunfire removed from cat DPS -- they're caster spells that break Cat Form.
+      // Handled in buildCasterDPSRotation() when you're in caster form instead.
 
       // Rake for DoT maintenance (simplified like Shaman Flame Shock)
       new bt.Sequence(
@@ -1097,8 +999,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Sunfire", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
         this.wasLastSpell("Moonfire") &&
-        this.getCurrentTarget().getAuraByMe(auras.sunfire) &&
-        this.getCurrentTarget().getAuraByMe(auras.sunfire).remaining < (this.getCurrentTarget().getAuraByMe(auras.sunfire).duration * 0.8)
+        this.unitHasSunfire(this.getCurrentTarget()) &&
+        this.unitHasSunfire(this.getCurrentTarget()).remaining < (this.unitHasSunfire(this.getCurrentTarget()).duration * 0.8)
       ),
 
       // Starfire for AoE with Heart of the Wild
@@ -1443,14 +1345,23 @@ export class JmrRestoDruidBehavior extends Behavior {
     ) || null;
   }
 
+  hasEverbloom() {
+    return me.hasAura(auras.everbloom) || spell.isSpellKnown("Everbloom");
+  }
+
+  friendHasLifebloom(friend) {
+    return friend.hasAuraByMe(auras.lifebloomResto) || friend.hasAuraByMe(auras.lifebloom) || friend.hasAuraByMe("Lifebloom");
+  }
+
+  getLifebloomAura(friend) {
+    return friend.getAuraByMe(auras.lifebloomResto) || friend.getAuraByMe(auras.lifebloom) || friend.getAuraByMe("Lifebloom");
+  }
+
   getLifebloomTarget() {
-    // This is for maintenance - only runs when "Maintain Lifebloom" is enabled
     if (!Settings.MaintainLifebloom) return null;
 
-    // Create a proper unique list of targets (avoid duplicates)
     const uniqueTargets = new Set();
 
-    // Add all friends with error handling
     try {
       heal.friends.All.forEach(friend => {
         try {
@@ -1458,47 +1369,52 @@ export class JmrRestoDruidBehavior extends Behavior {
             uniqueTargets.add(friend);
           }
         } catch (friendError) {
-          // Skip this friend if it causes errors
         }
       });
     } catch (error) {
-      // If heal.friends.All iteration fails, continue with just me
     }
 
-    // Add me if not already included
     if (me && !me.deadOrGhost) {
       uniqueTargets.add(me);
     }
 
     const availableTargets = Array.from(uniqueTargets);
-
-    // For solo play with Undergrowth, max should be 1 (can't have 2 on same person)
     const maxLifeblooms = (me.hasAura(auras.undergrowth) && availableTargets.length >= 2) ? 2 : 1;
 
-    // Count current Lifeblooms using visible aura check
     const uniqueFriendsWithLifebloom = new Set();
     availableTargets.forEach(friend => {
-      // Use hasAuraByMe to check for our own Lifebloom buff
-      if (friend.hasAuraByMe(auras.lifebloomResto)) {
+      if (this.friendHasLifebloom(friend)) {
         uniqueFriendsWithLifebloom.add(friend);
       }
     });
 
     const friendsWithLifebloom = Array.from(uniqueFriendsWithLifebloom);
 
-    // If we have enough Lifeblooms, only refresh when they need refreshing
-    if (friendsWithLifebloom.length >= maxLifeblooms) {
+    // With Everbloom, never move Lifebloom -- losing stacks is very costly.
+    // Only refresh the existing target when expiring.
+    if (this.hasEverbloom() && friendsWithLifebloom.length > 0) {
       const expiring = friendsWithLifebloom.find(friend => {
-        const lifebloomAura = friend.getAuraByMe(auras.lifebloomResto);
-
-        // If aura exists but remaining is null or 0, it should be refreshed
+        const lifebloomAura = this.getLifebloomAura(friend);
         if (lifebloomAura) {
           const remaining = lifebloomAura.remaining;
           if (remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500) {
             return true;
           }
         }
+        return false;
+      });
+      return expiring || null;
+    }
 
+    if (friendsWithLifebloom.length >= maxLifeblooms) {
+      const expiring = friendsWithLifebloom.find(friend => {
+        const lifebloomAura = this.getLifebloomAura(friend);
+        if (lifebloomAura) {
+          const remaining = lifebloomAura.remaining;
+          if (remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500) {
+            return true;
+          }
+        }
         return false;
       });
 
@@ -1511,7 +1427,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     const dpsWithoutLifebloom = heal.friends.DPS.filter(friend =>
       friend && !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
-      !friend.hasAuraByMe(auras.lifebloomResto)
+      !this.friendHasLifebloom(friend)
     );
 
     if (dpsWithoutLifebloom.length > 0) {
@@ -1523,7 +1439,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend && !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
       !this.isFriendATank(friend) &&
-      !friend.hasAuraByMe(auras.lifebloomResto) &&
+      !this.friendHasLifebloom(friend) &&
       !heal.friends.DPS.includes(friend) // Exclude DPS (already checked above)
     );
 
@@ -1532,7 +1448,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     }
 
     // 3. Me (only if we don't have our own Lifebloom)
-    if (!me.hasAuraByMe(auras.lifebloomResto)) {
+    if (!this.friendHasLifebloom(me)) {
       return me;
     }
 
@@ -1541,7 +1457,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       const tank = heal.friends.Tanks.find(tank =>
         tank && !tank.deadOrGhost &&
         me.distanceTo(tank) <= 40 &&
-        !tank.hasAuraByMe(auras.lifebloomResto)
+        !this.friendHasLifebloom(tank)
       );
       if (tank) return tank;
     }
@@ -1555,7 +1471,7 @@ export class JmrRestoDruidBehavior extends Behavior {
 
     // Count current active Lifeblooms
     const currentLifeblooms = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost && friend.hasAuraByMe(auras.lifebloomResto)
+      friend && !friend.deadOrGhost && this.friendHasLifebloom(friend)
     ).length;
 
     // Check if we have Undergrowth talent for 2 Lifeblooms, otherwise max 1
@@ -1566,10 +1482,10 @@ export class JmrRestoDruidBehavior extends Behavior {
       const expiringLifebloom = heal.friends.All.find(friend => {
         if (!friend || friend.deadOrGhost || me.distanceTo(friend) > 40) return false;
 
-        const lifebloomAura = friend.getAuraByMe(auras.lifebloomResto);
+        const lifebloomAura = this.getLifebloomAura(friend);
         if (!lifebloomAura) return false;
 
-        const remaining = this.getAuraRemainingTime(friend, auras.lifebloomResto);
+        const remaining = lifebloomAura.remaining || 0;
         return remaining !== null && remaining <= 4000; // 4 seconds
       });
 
@@ -1587,7 +1503,7 @@ export class JmrRestoDruidBehavior extends Behavior {
         friend && !friend.deadOrGhost &&
         me.distanceTo(friend) <= 40 &&
         friend.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct &&
-        !friend.hasAuraByMe(auras.lifebloomResto) // Don't overwrite our own Lifebloom
+        !this.friendHasLifebloom(friend) // Don't overwrite our own Lifebloom
       )
       .sort((a, b) => a.effectiveHealthPercent - b.effectiveHealthPercent)[0];
 
@@ -1595,44 +1511,24 @@ export class JmrRestoDruidBehavior extends Behavior {
   }
 
   getSwiftmendTarget() {
-    return heal.friends.All.find(friend =>
-      friend &&
-      !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      friend.effectiveHealthPercent <= Settings.SwiftmendHealthPct &&
-      (friend.hasAuraByMe(auras.rejuvenation) || friend.hasAuraByMe(auras.regrowth) || friend.hasAuraByMe(auras.wildGrowth))
-    ) || null;
-  }
+    const hasHoT = friend =>
+      friend.hasAuraByMe(auras.rejuvenation) || friend.hasAuraByMe(auras.regrowth) || friend.hasAuraByMe(auras.wildGrowth);
 
-  getCenarionWardTarget() {
-    // Prioritize tanks
-    const tank = heal.friends.Tanks.find(tank =>
-      tank &&
-      !tank.deadOrGhost &&
-      me.distanceTo(tank) <= 40 &&
-      !tank.hasAuraByMe(auras.cenarionWard)
-    );
-    if (tank) return tank;
+    const validFriend = friend =>
+      friend && !friend.deadOrGhost && me.distanceTo(friend) <= 40 &&
+      friend.effectiveHealthPercent <= Settings.SwiftmendHealthPct && hasHoT(friend);
 
-    // Or lowest health ally
-    return heal.friends.All.find(friend =>
-      friend &&
-      !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !friend.hasAuraByMe(auras.cenarionWard) &&
-      friend.effectiveHealthPercent <= 80
-    ) || null;
-  }
+    // With Everbloom, prefer Swiftmending the Lifebloom target for Verdant Infusion auto-refresh
+    if (this.hasEverbloom()) {
+      const lbTarget = heal.friends.All.find(f =>
+        f && !f.deadOrGhost && me.distanceTo(f) <= 40 &&
+        this.friendHasLifebloom(f) &&
+        f.effectiveHealthPercent <= Settings.SwiftmendHealthPct && hasHoT(f)
+      );
+      if (lbTarget) return lbTarget;
+    }
 
-  getGroveGuardiansTarget() {
-    // Find lowest health friend below threshold
-    return heal.friends.All
-      .filter(friend =>
-        friend && !friend.deadOrGhost &&
-        me.distanceTo(friend) <= 40 &&
-        friend.effectiveHealthPercent <= Settings.GroveGuardiansHealthPct
-      )
-      .sort((a, b) => a.effectiveHealthPercent - b.effectiveHealthPercent)[0] || null;
+    return heal.friends.All.find(validFriend) || null;
   }
 
   getIronbarkTarget() {
@@ -1660,43 +1556,6 @@ export class JmrRestoDruidBehavior extends Behavior {
       me.distanceTo(enemy) <= range &&
       enemy.isCastingOrChanneling
     ).length;
-  }
-
-  shouldInterruptNow() {
-    // Check if any casting enemy meets the interrupt percentage criteria
-    const castingEnemies = combat.targets.filter(enemy =>
-      !enemy.deadOrGhost &&
-      me.distanceTo(enemy) <= 10 &&
-      enemy.isCastingOrChanneling &&
-      me.isFacing(enemy) &&
-      me.withinLineOfSight(enemy)
-    );
-
-    for (const enemy of castingEnemies) {
-      const castInfo = enemy.spellInfo;
-      if (!castInfo) continue;
-
-      const currentTime = wow.frameTime;
-      const castRemains = castInfo.castEnd - currentTime;
-      const castTime = castInfo.castEnd - castInfo.castStart;
-      const castPctRemain = (castRemains / castTime) * 100;
-      const channelTime = currentTime - castInfo.channelStart;
-
-      // For channels, use time-based check (similar to Spell.js logic)
-      if (enemy.isChanneling) {
-        const randomInterruptTime = 700 + (Math.random() * 800 - 400); // 300-1100ms
-        if (channelTime > randomInterruptTime) {
-          return true;
-        }
-      } else {
-        // For casts, use percentage-based check
-        if (castPctRemain <= Settings.InterruptPercentage) {
-          return true;
-        }
-      }
-    }
-
-    return false;
   }
 
   getFriendsUnderHealthPercent(percentage) {
@@ -1918,10 +1777,14 @@ export class JmrRestoDruidBehavior extends Behavior {
   }
 
   getAuraRemainingTime(unit, auraName) {
-    // Helper to get aura remaining time properly
     if (!unit) return 0;
     const aura = unit.getAuraByMe(auraName);
     return aura ? aura.remaining : 0;
+  }
+
+  getAbundanceStacks() {
+    const abundanceAura = me.getAura(auras.abundance);
+    return abundanceAura ? (abundanceAura.stacks || 0) : 0;
   }
 
   isTargetEngagedByGroup() {
@@ -1953,122 +1816,92 @@ export class JmrRestoDruidBehavior extends Behavior {
 
   // Multi-target DoT management helpers
   getRipTarget() {
-    // Prioritize current target if it needs Rip and is valid for DPS
-    if (me.target && me.targetUnit && me.distanceTo(me.targetUnit) <= 5 && this.isValidDPSTarget(me.targetUnit)) {
-      const ripAura = me.targetUnit.getAuraByMe("Rip");
-      const hasRip = ripAura !== null;
-      const ripRemaining = ripAura ? ripAura.remaining : 0;
+    // Resto cat weaving: only Rip your current target, don't spread to other mobs
+    if (!me.target || !me.targetUnit) return null;
+    if (me.distanceTo(me.targetUnit) > 5) return null;
+    if (!this.isValidDPSTarget(me.targetUnit)) return null;
 
-             if (!hasRip || ripRemaining < 10000) {
-         // Check TTD for current target (if TTD respect is enabled)
-         if (!Settings.RespectRipTTD || this.getTimeToDeath(me.targetUnit) >= (Settings.RipMinTTD * 1000)) {
-           return me.target;
-         }
-       }
-     }
+    const ripAura = me.targetUnit.getAuraByMe("Rip");
+    if (ripAura && ripAura.remaining >= 10000) return null;
 
-     // Find any enemy without Rip (using me.getUnitsAround like Shaman)
-     const units = me.getUnitsAround(5);
-     return units.find(unit =>
-       unit &&
-       !unit.deadOrGhost &&
-       me.isFacing(unit) &&
-       !unit.isImmune() &&
-       me.withinLineOfSight(unit) &&
-       me.canAttack(unit) &&
-      this.isValidDPSTarget(unit) &&
-      (!Settings.RespectRipTTD || this.getTimeToDeath(unit) >= (Settings.RipMinTTD * 1000)) &&
-      !unit.getAuraByMe("Rip")
-     ) || null;
+    if (Settings.RespectRipTTD && this.getTimeToDeath(me.targetUnit) < (Settings.RipMinTTD * 1000)) return null;
+
+    return me.target;
   }
 
   getRakeTarget() {
-    // Prioritize current target if it needs Rake and is valid for DPS
-    if (me.target && me.targetUnit && me.distanceTo(me.targetUnit) <= 5 && this.isValidDPSTarget(me.targetUnit)) {
-      const rakeAura = me.targetUnit.getAuraByMe("Rake");
-      const hasRake = rakeAura !== null;
-      const rakeRemaining = rakeAura ? rakeAura.remaining : 0;
+    // Resto cat weaving: only Rake your current target, don't spread to other mobs
+    if (!me.target || !me.targetUnit) return null;
+    if (me.distanceTo(me.targetUnit) > 5) return null;
+    if (!this.isValidDPSTarget(me.targetUnit)) return null;
 
-      if (!hasRake || rakeRemaining < 3000) {
-        // Check TTD for current target (if TTD respect is enabled)
-        if (!Settings.RespectRakeTTD || this.getTimeToDeath(me.targetUnit) >= (Settings.RakeMinTTD * 1000)) {
-          return me.target;
-        }
-      }
-    }
+    const rakeAura = me.targetUnit.getAuraByMe("Rake");
+    if (rakeAura && rakeAura.remaining >= 3000) return null;
 
-    // Find any enemy without Rake (using me.getUnitsAround like Shaman)
-    const units = me.getUnitsAround(5);
-    return units.find(unit =>
-      unit &&
-      !unit.deadOrGhost &&
-      me.isFacing(unit) &&
-      !unit.isImmune() &&
-      me.withinLineOfSight(unit) &&
-      me.canAttack(unit) &&
-      this.isValidDPSTarget(unit) &&
-      (!Settings.RespectRakeTTD || this.getTimeToDeath(unit) >= (Settings.RakeMinTTD * 1000)) &&
-      !unit.getAuraByMe("Rake")
-    ) || null;
+    if (Settings.RespectRakeTTD && this.getTimeToDeath(me.targetUnit) < (Settings.RakeMinTTD * 1000)) return null;
+
+    return me.target;
+  }
+
+  unitHasMoonfire(unit) {
+    return unit.getAuraByMe(auras.moonfire) || unit.getAuraByMe("Moonfire");
+  }
+
+  unitHasSunfire(unit) {
+    return unit.getAuraByMe(auras.sunfire) || unit.getAuraByMe("Sunfire");
   }
 
   getMoonfireTarget() {
-    // Prioritize current target if it needs Moonfire and is valid for DPS
     if (me.target && me.targetUnit && me.distanceTo(me.targetUnit) <= 40 && this.isValidDPSTarget(me.targetUnit)) {
-      const moonfireAura = me.targetUnit.getAuraByMe(auras.moonfire);
-      const hasMoonfire = moonfireAura !== null;
+      const moonfireAura = this.unitHasMoonfire(me.targetUnit);
       const moonfireRemaining = moonfireAura ? moonfireAura.remaining : 0;
 
-      if (!hasMoonfire || moonfireRemaining < 5000) {
-        // Check TTD for current target
+      if (!moonfireAura || moonfireRemaining < 5000) {
         if (this.getTimeToDeath(me.targetUnit) >= (Settings.MoonfireMinTTD * 1000)) {
           return me.target;
         }
       }
     }
 
-    // Find any enemy without Moonfire
-    const units = me.getUnitsAround(40);
-    return units.find(unit =>
+    // Only check combat.targets, not all units in 40y -- avoid dotting random mobs
+    return combat.targets.find(unit =>
       unit &&
       !unit.deadOrGhost &&
+      me.distanceTo(unit) <= 40 &&
       me.isFacing(unit) &&
       !unit.isImmune() &&
       me.withinLineOfSight(unit) &&
       me.canAttack(unit) &&
       this.isValidDPSTarget(unit) &&
       this.getTimeToDeath(unit) >= (Settings.MoonfireMinTTD * 1000) &&
-      !unit.getAuraByMe(auras.moonfire)
+      !this.unitHasMoonfire(unit)
     ) || null;
   }
 
   getSunfireTarget() {
-    // Prioritize current target if it needs Sunfire and is valid for DPS
     if (me.target && me.targetUnit && me.distanceTo(me.targetUnit) <= 40 && this.isValidDPSTarget(me.targetUnit)) {
-      const sunfireAura = me.targetUnit.getAuraByMe(auras.sunfire);
-      const hasSunfire = sunfireAura !== null;
+      const sunfireAura = this.unitHasSunfire(me.targetUnit);
       const sunfireRemaining = sunfireAura ? sunfireAura.remaining : 0;
 
-      if (!hasSunfire || sunfireRemaining < 5000) {
-        // Check TTD for current target
+      if (!sunfireAura || sunfireRemaining < 5000) {
         if (this.getTimeToDeath(me.targetUnit) >= (Settings.SunfireMinTTD * 1000)) {
           return me.target;
         }
       }
     }
 
-    // Find any enemy without Sunfire (using me.getUnitsAround like Shaman)
-    const units = me.getUnitsAround(40);
-    return units.find(unit =>
+    // Only check combat.targets, not all units in 40y
+    return combat.targets.find(unit =>
       unit &&
       !unit.deadOrGhost &&
+      me.distanceTo(unit) <= 40 &&
       me.isFacing(unit) &&
       !unit.isImmune() &&
       me.withinLineOfSight(unit) &&
       me.canAttack(unit) &&
       this.isValidDPSTarget(unit) &&
       this.getTimeToDeath(unit) >= (Settings.SunfireMinTTD * 1000) &&
-      !unit.getAuraByMe(auras.sunfire)
+      !this.unitHasSunfire(unit)
     ) || null;
   }
 
@@ -2106,7 +1939,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     const allTargetsIncludingMe = [...heal.friends.All, me];
     const currentLifeblooms = allTargetsIncludingMe.filter(friend => {
       try {
-        return friend && !friend.deadOrGhost && friend.hasAuraByMe(auras.lifebloomResto);
+        return friend && !friend.deadOrGhost && this.friendHasLifebloom(friend);
       } catch (error) {
         return false;
       }
@@ -2122,7 +1955,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend && !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
       !this.isFriendATank(friend) &&
-      !friend.hasAuraByMe(auras.lifebloomResto)
+      !this.friendHasLifebloom(friend)
     );
 
     // If we have Undergrowth and need 2 Lifeblooms, prioritize 2 party members first
@@ -2135,10 +1968,10 @@ export class JmrRestoDruidBehavior extends Behavior {
       // If we only have 1 non-tank friend and they already have Lifebloom,
       // check if we need to put the second one on me
       const friendsWithLifebloom = nonTankFriends.filter(friend =>
-        friend.hasAuraByMe(auras.lifebloomResto)
+        this.friendHasLifebloom(friend)
       );
 
-      if (friendsWithLifebloom.length >= 1 && !me.hasAuraByMe(auras.lifebloomResto)) {
+      if (friendsWithLifebloom.length >= 1 && !this.friendHasLifebloom(me)) {
         return me; // Put second Lifebloom on me
       }
     } else {
@@ -2147,7 +1980,7 @@ export class JmrRestoDruidBehavior extends Behavior {
         return nonTankFriends[0];
       }
 
-      if (!me.hasAuraByMe(auras.lifebloomResto)) {
+      if (!this.friendHasLifebloom(me)) {
         return me;
       }
     }
@@ -2157,7 +1990,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       const tank = heal.friends.Tanks.find(tank =>
         tank && !tank.deadOrGhost &&
         me.distanceTo(tank) <= 40 &&
-        !tank.hasAuraByMe(auras.lifebloomResto)
+        !this.friendHasLifebloom(tank)
       );
       if (tank) return tank;
     }
@@ -2173,7 +2006,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
       !this.isFriendATank(friend) &&
-      !friend.hasAuraByMe(auras.lifebloomResto) &&
+      !this.friendHasLifebloom(friend) &&
       !friend.hasAuraByMe(auras.rejuvenation)
     ) || null;
   }
@@ -2211,20 +2044,6 @@ export class JmrRestoDruidBehavior extends Behavior {
     ) || null;
   }
 
-  getRampGroveGuardianTarget() {
-    // If everyone is full health (>90%), cast on me
-    const lowHealthFriends = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost && friend.effectiveHealthPercent <= 90
-    );
-
-    if (lowHealthFriends.length === 0) {
-      return me; // Everyone is full health, cast on me
-    }
-
-    // Otherwise cast on lowest health ally
-    return this.getLowestHealthAlly();
-  }
-
   isFriendATank(friend) {
     return heal.friends.Tanks.some(tank =>
       tank && tank.guid.equals(friend.guid)
@@ -2235,9 +2054,8 @@ export class JmrRestoDruidBehavior extends Behavior {
     // Check if we have HoTs active on friends for Nature's Vigil synergy
     const friendsWithHoTs = heal.friends.All.filter(friend =>
       friend && !friend.deadOrGhost &&
-      (friend.hasAuraByMe(auras.lifebloomResto) ||
+      (this.friendHasLifebloom(friend) ||
        friend.hasAuraByMe(auras.rejuvenation) ||
-       friend.hasAuraByMe(auras.cenarionWard) ||
        friend.hasAuraByMe(auras.regrowth))
     );
 
@@ -2258,7 +2076,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       !enemy.deadOrGhost &&
       me.distanceTo(enemy) <= 40 &&
       this.getTimeToDeath(enemy) > 12000 &&
-      (!enemy.hasAuraByMe(auras.moonfire) || enemy.getAuraByMe(auras.moonfire).remaining < 5000)
+      (!this.unitHasMoonfire(enemy) || this.unitHasMoonfire(enemy).remaining < 5000)
     );
   }
 
@@ -2267,7 +2085,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       !enemy.deadOrGhost &&
       me.distanceTo(enemy) <= 40 &&
       this.getTimeToDeath(enemy) > 5000 &&
-      (!enemy.hasAuraByMe(auras.sunfire) || enemy.getAuraByMe(auras.sunfire).remaining < 5000)
+      (!this.unitHasSunfire(enemy) || this.unitHasSunfire(enemy).remaining < 5000)
     );
   }
 
@@ -2284,8 +2102,9 @@ export class JmrRestoDruidBehavior extends Behavior {
 
     for (const enemy of enemies) {
       let priority = 0;
-      const hasSunfire = enemy.hasAuraByMe(auras.sunfire);
-      const sunfireRemaining = hasSunfire ? enemy.getAuraByMe(auras.sunfire).remaining : 0;
+      const sunfireAura = this.unitHasSunfire(enemy);
+      const hasSunfire = !!sunfireAura;
+      const sunfireRemaining = sunfireAura ? sunfireAura.remaining : 0;
 
       if (!hasSunfire) {
         priority = 100; // Highest priority - no Sunfire at all
@@ -2320,8 +2139,9 @@ export class JmrRestoDruidBehavior extends Behavior {
 
     for (const enemy of enemies) {
       let priority = 0;
-      const hasMoonfire = enemy.hasAuraByMe(auras.moonfire);
-      const moonfireRemaining = hasMoonfire ? enemy.getAuraByMe(auras.moonfire).remaining : 0;
+      const moonfireAura = this.unitHasMoonfire(enemy);
+      const hasMoonfire = !!moonfireAura;
+      const moonfireRemaining = moonfireAura ? moonfireAura.remaining : 0;
 
       if (!hasMoonfire) {
         priority = 100; // Highest priority - no Moonfire at all
@@ -2353,12 +2173,10 @@ export class JmrRestoDruidBehavior extends Behavior {
         // Start ramp
         this.rampModeActive = true;
         this.rampStartTime = wow.frameTime;
-        this.groveGuardianUsedThisRamp = false; // Reset Grove Guardian counter
       } else {
         // Cancel ramp
         this.rampModeActive = false;
         this.rampStartTime = 0;
-        this.groveGuardianUsedThisRamp = false; // Reset counter
       }
     }
 
@@ -2369,7 +2187,6 @@ export class JmrRestoDruidBehavior extends Behavior {
       if (elapsed >= Settings.RampDuration) {
         this.rampModeActive = false;
         this.rampStartTime = 0;
-        this.groveGuardianUsedThisRamp = false; // Reset counter when ramp ends
       }
     }
   }
@@ -2876,7 +2693,6 @@ export class JmrRestoDruidBehavior extends Behavior {
           if (imgui.button("Cancel Ramp", { x: 120, y: 0 })) {
             this.rampModeActive = false;
             this.rampStartTime = 0;
-            this.groveGuardianUsedThisRamp = false;
           }
         } else {
           const keyName = KeyBinding.formatKeyBinding(KeyBinding.keybindings["RampKeybind"]) || "F1";
@@ -2885,7 +2701,6 @@ export class JmrRestoDruidBehavior extends Behavior {
           if (imgui.button("Start Ramp", { x: 120, y: 0 })) {
             this.rampModeActive = true;
             this.rampStartTime = wow.frameTime;
-            this.groveGuardianUsedThisRamp = false;
           }
         }
 
@@ -2971,8 +2786,8 @@ export class JmrRestoDruidBehavior extends Behavior {
           imgui.text(`Health: ${currentTarget.effectiveHealthPercent.toFixed(1)}%`);
 
           // Show DoT status
-          const hasSunfire = currentTarget.hasAura(auras.sunfire);
-          const hasMoonfire = currentTarget.hasAura(auras.moonfire);
+          const hasSunfire = !!(this.unitHasSunfire(currentTarget) || currentTarget.hasAura("Sunfire"));
+          const hasMoonfire = !!(this.unitHasMoonfire(currentTarget) || currentTarget.hasAura("Moonfire"));
           const sunfireColor = hasSunfire ? { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 1.0, g: 0.6, b: 0.2, a: 1.0 };
           const moonfireColor = hasMoonfire ? { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 1.0, g: 0.6, b: 0.2, a: 1.0 };
 
