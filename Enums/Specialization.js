@@ -12,6 +12,7 @@ const Specialization = {
   DemonHunter: {
     Havoc: 577,
     Vengeance: 581,
+    Devourer: 1480,
     Initial: 1456,
   },
   Druid: {
