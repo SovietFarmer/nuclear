@@ -71,6 +71,10 @@ so you know what methods are actually available and how they work under the hood
   consecutive ticks. Use getTimeSinceLastCast() with a 2-3s window to prevent overlap.
   Add a low-HP override so CDs can still stack when someone is dying.
 
+# Dispel Priority Rules
+- In PVE rotations, use DispelPriority.Low for all dispels. High/Medium priorities are
+  only appropriate in PVP rotations where dispelling quickly is critical.
+
 # PvP-Specific Patterns
 - canCC() checks PVPImmuneToCC (bubble, ice block, bladestorm, etc.) but does NOT check
   movement immunities like Blessing of Freedom. For roots/slows, check Freedom separately.
