@@ -110,12 +110,17 @@ export class PriestDisciplinePvP extends Behavior {
             this.findIncomingCCTarget() !== undefined && !spell.isOnCooldown("Shadow Word: Death")
           ),
           spell.cast("Fade", () =>
-            this.hasIncomingCCForFade() && !spell.isOnCooldown("Fade")
+            this.canAttemptFadeCast() &&
+            this.hasIncomingCCForFade() &&
+            !spell.isOnCooldown("Fade")
           ),
 
           // Preemptive Fade for predicted enemy CC (priest within 8y, rogue within 4y)
           spell.cast("Fade", () =>
-            Settings.UsePreemptiveFade && !spell.isOnCooldown("Fade") && this.shouldPreemptiveFade()
+            this.canAttemptFadeCast() &&
+            Settings.UsePreemptiveFade &&
+            !spell.isOnCooldown("Fade") &&
+            this.shouldPreemptiveFade()
           ),
 
           common.waitForCastOrChannel(),
@@ -577,7 +582,8 @@ export class PriestDisciplinePvP extends Behavior {
         return bt.Status.Failure; // Proceed to next child
       }),
       spell.cast("Power Word: Life", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 50),
-      spell.cast("Desperate Prayer", on => me, ret => me.effectiveHealthPercent < 40 && !this.usedMajorHealCDRecently(me)),
+      spell.cast("Desperate Prayer", on => me, ret =>
+        spell.isSpellKnown("Desperate Prayer") && me.effectiveHealthPercent < 40 && !this.usedMajorHealCDRecently(me)),
       spell.cast("Pain Suppression", on => this.healTarget, ret => this.shouldUsePainSuppression(this.healTarget), {
         callback: () => {
           this.updateDefensiveCooldownTime("Pain Suppression");
@@ -631,7 +637,11 @@ export class PriestDisciplinePvP extends Behavior {
       spell.cast("Shadow Word: Death", on => this.findAdvancedShadowWordDeathTarget(), ret =>
         Settings.UseAdvancedShadowWordDeath === true && this.findAdvancedShadowWordDeathTarget() !== undefined
       ),
-      spell.cast("Fade", () => Settings.UseFadeForReflectSpells === true && this.shouldUseFadeForReflectSpells()),
+      spell.cast("Fade", () =>
+        this.canAttemptFadeCast() &&
+        Settings.UseFadeForReflectSpells === true &&
+        this.shouldUseFadeForReflectSpells()
+      ),
       spell.cast("Power Infusion", on => this.findPowerInfusionTarget(), ret =>
         Settings.UseAutoPowerInfusion === true && this.findPowerInfusionTarget() !== undefined
       ),
@@ -740,7 +750,7 @@ export class PriestDisciplinePvP extends Behavior {
 
     const window = 2500;
     if (spell.getTimeSinceLastCast("Pain Suppression") < window) return true;
-    if (spell.getTimeSinceLastCast("Desperate Prayer") < window) return true;
+    if (spell.isSpellKnown("Desperate Prayer") && spell.getTimeSinceLastCast("Desperate Prayer") < window) return true;
     if (spell.getTimeSinceLastCast("Evangelism") < window) return true;
     if (spell.isSpellKnown("Power Word: Barrier") && spell.getTimeSinceLastCast("Power Word: Barrier") < window) return true;
     if (spell.isSpellKnown("Void Shift") && spell.getTimeSinceLastCast("Void Shift") < window) return true;
@@ -749,6 +759,11 @@ export class PriestDisciplinePvP extends Behavior {
 
   shouldUsePainSuppression(target) {
     if (!target) return false;
+    // Pain Suppression can be cast while stunned. If we're NOT stunned, use full lockout check
+    // (me.isUnableToCast includes silence, pacify, fear, confuse, stun, NO_ACTIONS).
+    if (!me) return false;
+    if (!me.isStunned() && me.isUnableToCast()) return false;
+
     if (this.usedMajorHealCDRecently(target)) return false;
 
     if (target.hasAura("Ice Block") || target.hasAura("Divine Shield")) {
@@ -777,6 +792,14 @@ export class PriestDisciplinePvP extends Behavior {
     }
 
     return true;
+  }
+
+  /**
+   * Fade and similar utility casts: do not spam while silenced/stunned/etc.
+   * Unlike Pain Suppression (see shouldUsePainSuppression), Fade has no stun bypass — you cannot Fade while stunned.
+   */
+  canAttemptFadeCast() {
+    return !(!me || me.isUnableToCast());
   }
 
   shouldUseVoidShift(target) {
@@ -957,6 +980,9 @@ export class PriestDisciplinePvP extends Behavior {
   // Enhanced PVP Methods
 
   findPowerInfusionTarget() {
+    if (!me || me.isUnableToCast()) {
+      return undefined;
+    }
     // Check cooldown first
     if (spell.isOnCooldown("Power Infusion")) {
       return undefined;
@@ -1014,11 +1040,6 @@ export class PriestDisciplinePvP extends Behavior {
         bestPriority = priority;
         bestTarget = friend;
       }
-    }
-
-    if (bestTarget) {
-      const majorCooldown = pvpHelpers.hasMajorDamageCooldown(bestTarget, 3);
-      console.log(`[Priest] Power Infusion on ${bestTarget.unsafeName} with ${majorCooldown.name} (${majorCooldown.remainingTime.toFixed(1)}s remaining)`);
     }
 
     return bestTarget;
@@ -1079,6 +1100,7 @@ export class PriestDisciplinePvP extends Behavior {
   }
 
   shouldUseVoidTendrils() {
+    if (!me || me.isUnableToCast()) return false;
     if (!spell.isSpellKnown("Void Tendrils")) return false;
     if (spell.isOnCooldown("Void Tendrils")) {
       return false;
@@ -1092,13 +1114,15 @@ export class PriestDisciplinePvP extends Behavior {
     );
 
     if (eligibleEnemies.length >= 2) {
-      console.log(`[Priest] Using Void Tendrils - ${eligibleEnemies.length} enemies within 8 yards`);
       return true;
     }
     return false;
   }
 
   findMindControlTarget() {
+    if (!me || me.isUnableToCast()) {
+      return undefined;
+    }
     // Check cooldown first
     if (spell.isOnCooldown("Mind Control")) {
       return undefined;
@@ -1131,7 +1155,6 @@ export class PriestDisciplinePvP extends Behavior {
         drTracker.getDRStacks(enemy.guid, "disorient") <= Settings.MindControlMaxDR &&
         !pvpHelpers.hasImmunity(enemy)) {
 
-        console.log(`[Priest] Mind Control conditions met - targeting ${enemy.unsafeName}`);
         return enemy;
       }
     }
@@ -1141,6 +1164,10 @@ export class PriestDisciplinePvP extends Behavior {
   findMindControlDPSTarget() {
     // Check if the setting is enabled first
     if (Settings.UseMindControlDPS !== true) {
+      return undefined;
+    }
+
+    if (!me || me.isUnableToCast()) {
       return undefined;
     }
 
@@ -1167,7 +1194,6 @@ export class PriestDisciplinePvP extends Behavior {
         // Check if this enemy has major cooldowns active
         const majorCooldown = pvpHelpers.hasMajorDamageCooldown(enemy, 3);
         if (majorCooldown) {
-          console.log(`[Priest] Mind Control DPS conditions met - targeting ${enemy.unsafeName} with major CD`);
           return enemy;
         }
       }

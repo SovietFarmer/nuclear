@@ -14,6 +14,29 @@ class Common {
     }, "Wait for cast or channel");
   }
 
+  /**
+   * Blocks lower-priority siblings in a {@link bt.Selector} while the player cannot cast
+   * (stun, silence, pacify, fear, confuse, NO_ACTIONS — see CGUnit `isUnableToCast()`).
+   *
+   * **Disclaimer:** Some spells are intentionally castable while CC'd (e.g. Priest Pain Suppression
+   * while stunned). This node does **not** know per-spell rules. Place those casts **above** this
+   * node in the tree, or gate them with rotation-specific conditions — do not rely on this alone.
+   *
+   * Semantics match {@link Common.waitForCastOrChannel}: returns Success while the "wait"
+   * condition holds (here: unable to cast), Failure when the player may attempt casts.
+   */
+  static waitForAbleToCast() {
+    return new bt.Action(() => {
+      if (!me) {
+        return bt.Status.Success;
+      }
+      if (me.isUnableToCast()) {
+        return bt.Status.Success;
+      }
+      return bt.Status.Failure;
+    }, "Wait while unable to cast (CC/lockout)");
+  }
+
   static waitForTarget() {
     return new bt.Action(() => {
       if (!me.targetUnit || !Common.validTarget(me.targetUnit)) {

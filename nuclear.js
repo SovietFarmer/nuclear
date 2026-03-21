@@ -58,14 +58,40 @@ class Nuclear extends wow.EventListener {
       }
     }
 
+    const failPauseEnabled = settings.PauseRotationOnFailedCasts;
+    const failPauseUntil = globalThis.__nuclearFailPauseUntil || 0;
+    const failPaused = failPauseEnabled && failPauseUntil > wow.frameTime;
+    const rotationPaused = this.isPaused || failPaused;
+
     // Draw pause indicator if paused
-    if (this.isPaused) {
-      const pauseText = "ROTATION PAUSED";
+    if (rotationPaused) {
       const displaySize = imgui.io.displaySize;
-      const center = {x: displaySize.x / 2, y: displaySize.y / 2};
+      const remainingMs = Math.max(0, failPauseUntil - wow.frameTime);
+      const pauseText = failPaused ? `BOT PAUSED (${Math.ceil(remainingMs)}ms)` : "ROTATION PAUSED";
       const textSize = imgui.calcTextSize(pauseText);
-      const adjusted = {x: center.x - textSize.x / 2, y: center.y - textSize.y / 2};
-      imgui.getBackgroundDrawList()?.addText(pauseText, adjusted, colors.yellow);
+
+      // Log pause status periodically so we can verify timing behavior.
+      if (failPaused && settings.FailedCastPauseDebugLogs) {
+        const now = wow.frameTime;
+        if (!this._lastFailPauseStatusLog || (now - this._lastFailPauseStatusLog) >= 250) {
+          console.info(`Bot paused, ${Math.ceil(remainingMs)}ms remaining`);
+          this._lastFailPauseStatusLog = now;
+        }
+      } else {
+        this._lastFailPauseStatusLog = 0;
+      }
+
+      let drawPos = { x: (displaySize.x - textSize.x) / 2, y: displaySize.y / 2 };
+      const meScreenPos = me ? wow.WorldFrame.getScreenCoordinates(me.position) : null;
+      if (meScreenPos && meScreenPos.x !== -1 && meScreenPos.y !== -1) {
+        // Draw near player feet, then nudge further down by ~10% of screen height.
+        drawPos = {
+          x: meScreenPos.x - textSize.x / 2,
+          y: meScreenPos.y + (displaySize.y * 0.05)
+        };
+      }
+
+      imgui.getBackgroundDrawList()?.addText(pauseText, drawPos, colors.yellow);
     }
 
     try {
@@ -73,7 +99,7 @@ class Nuclear extends wow.EventListener {
       defaultCombatTargeting?.update();
       drTracker.update();
       cooldownTracker.update();
-      if (this.behaviorRoot && !this.isPaused) {
+      if (this.behaviorRoot && !rotationPaused) {
         this.behaviorRoot.execute(this.behaviorContext);
       }
     } catch (e) {

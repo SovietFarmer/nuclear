@@ -45,8 +45,22 @@ const Settings = new Proxy(settings, {
       return target[key];
     }
 
-    // Get character-specific settings
-    const playerKey = `player${me?.guid?.low}`;
+    // Get character-specific settings (avoid touching invalid `me` during load/rebuild — can AV in native bridge)
+    let playerKey;
+    try {
+      const low = me?.guid?.low;
+      if (low === undefined || low === null) {
+        return undefined;
+      }
+      playerKey = `player${low}`;
+    } catch {
+      return undefined;
+    }
+
+    if (!settings.Character) {
+      return undefined;
+    }
+
     const charSettings = settings.Character[playerKey];
 
     if (charSettings && key in charSettings) {
@@ -63,7 +77,20 @@ const Settings = new Proxy(settings, {
       return false;
     }
 
-    const playerKey = `player${me.guid.low}`;
+    let playerKey;
+    try {
+      const low = me?.guid?.low;
+      if (low === undefined || low === null) {
+        return false;
+      }
+      playerKey = `player${low}`;
+    } catch {
+      return false;
+    }
+
+    if (!settings.Character) {
+      settings.Character = {};
+    }
 
     // Ensure character object exists
     if (!settings.Character[playerKey]) {

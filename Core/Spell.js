@@ -53,7 +53,7 @@ class Spell extends wow.EventListener {
             targetName: targetName,
             timestamp: wow.frameTime
           });
-          
+
           // Keep only the last 10 spells to prevent memory bloat
           if (this._lastSuccessfulSpells.length > 10) {
             this._lastSuccessfulSpells.shift();
@@ -198,10 +198,13 @@ class Spell extends wow.EventListener {
           return bt.Status.Failure;
         }
 
+        // Record cast attempt timestamp before calling castPrimitive.
+        // If castPrimitive fails synchronously, keep this timestamp so
+        // the failed-cast listener can recognize our own bot attempt and
+        // avoid re-queueing it immediately.
         this._lastCastTimes.set(spell.id, currentTime);
 
         if (!this.castPrimitive(spell, target)) {
-          this._lastCastTimes.delete(spell.id);
           return bt.Status.Failure;
         }
 
@@ -715,11 +718,11 @@ class Spell extends wow.EventListener {
     if (includeTimestamp) {
       return reversedResult;
     } else {
-      return reversedResult.map(({ name, id, spellName, targetName }) => ({ 
-        name, 
-        id, 
-        spellName, 
-        targetName 
+      return reversedResult.map(({ name, id, spellName, targetName }) => ({
+        name,
+        id,
+        spellName,
+        targetName
       }));
     }
   }
