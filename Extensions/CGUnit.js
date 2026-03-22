@@ -1,6 +1,6 @@
 import objMgr, { me } from "@/Core/ObjectManager";
 import Common from "@/Core/Common";
-import { MovementFlags, TraceLineHitFlags, UnitFlags, UnitStandStateType } from "@/Enums/Flags";
+import { MovementFlags, TraceLineHitFlags, UnitFlags, UnitFlags2, UnitStandStateType } from "@/Enums/Flags";
 import { HealImmune, PVPImmuneToCC } from "@/Enums/Auras";
 import Settings from "@/Core/Settings";
 import { rootExclusions } from "@/Data/Exclusions";
@@ -479,6 +479,25 @@ Object.defineProperties(wow.CGUnit.prototype, {
     }
   },
 
+  /**
+   * True if the unit cannot cast spells: stunned, silenced, pacified, feared, confused,
+   * or under NO_ACTIONS (unitFlags / unitFlags2). Use on `me` to avoid spamming casts while CC'd.
+   * @returns {boolean}
+   */
+  isUnableToCast: {
+    value: function () {
+      const f = this.unitFlags;
+      const f2 = this.unitFlags2;
+      if ((f & UnitFlags.STUNNED) !== 0) return true;
+      if ((f & UnitFlags.SILENCED) !== 0) return true;
+      if ((f & UnitFlags.PACIFIED) !== 0) return true;
+      if ((f & UnitFlags.FLEEING) !== 0) return true;
+      if ((f & UnitFlags.CONFUSED) !== 0) return true;
+      if ((f2 & UnitFlags2.NO_ACTIONS) !== 0) return true;
+      return false;
+    }
+  },
+
   angleToXY: {
     /**
      * Calculate the angle from one set of coordinates to another, taking into account the unit's facing direction.
@@ -604,9 +623,8 @@ Object.defineProperties(wow.CGUnit.prototype, {
      */
     value: function (target) {
       if (target === me) {
-        return true
+        return true;
       }
-
       target = target instanceof wow.CGUnit ? target : target.toUnit();
       if (!target || !target.position || !this.position) {
         return false;

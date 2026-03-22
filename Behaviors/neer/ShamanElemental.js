@@ -11,6 +11,8 @@ const auras = {
   flameShock: 188389,
   lavaSurge: 77762,
   masterOfTheElements: 260734,
+  lightningShield: 192106,
+  skyfury: 462854,
 };
 
 export class ShamanElementalBehavior extends Behavior {
@@ -54,6 +56,8 @@ export class ShamanElementalBehavior extends Behavior {
     return new bt.Selector(
       common.waitForNotSitting(),
       common.waitForNotMounted(),
+      spell.cast("Lightning Shield", on => me, ret => !me.hasAuraByMe(auras.lightningShield) && !me.hasAuraByMe("Ghost Wolf")),
+      spell.cast("Skyfury", on => me, ret => !me.hasAura(auras.skyfury) && !me.hasAuraByMe("Ghost Wolf")),
       common.waitForCastOrChannel(),
       common.waitForTarget(),
       common.waitForFacing(),
@@ -89,7 +93,7 @@ export class ShamanElementalBehavior extends Behavior {
       spell.cast("Ancestral Swiftness", on => me),
       spell.cast("Ascendance", on => me, ret => {
         if (!Settings.UseAscendance) return false;
-        if (me.hasAura("Stormkeeper")) return true;
+        if (me.hasVisibleAura("Stormkeeper")) return true;
         if (!spell.isSpellKnown("Stormkeeper")) return true;
         return spell.isOnCooldown("Stormkeeper");
       })
@@ -101,18 +105,18 @@ export class ShamanElementalBehavior extends Behavior {
       // Ascendance window: dump maelstrom before it fades
       spell.cast("Elemental Blast", on => me.target, ret => {
         if (!this.hasElementalBlast) return false;
-        const asc = me.getAura("Ascendance");
+        const asc = me.getVisibleAura("Ascendance");
         return asc && asc.remaining < 3000;
       }),
       spell.cast("Earth Shock", on => me.target, ret => {
         if (this.hasElementalBlast) return false;
-        const asc = me.getAura("Ascendance");
+        const asc = me.getVisibleAura("Ascendance");
         return asc && asc.remaining < 3000;
       }),
 
       // Ascendance window: refresh Voltaic Blaze before it fades
       spell.cast("Voltaic Blaze", on => me.target, ret => {
-        const asc = me.getAura("Ascendance");
+        const asc = me.getVisibleAura("Ascendance");
         return asc && asc.remaining < 3000;
       }),
 
@@ -124,7 +128,7 @@ export class ShamanElementalBehavior extends Behavior {
       }),
 
       // Tempest proc (Stormbringer)
-      spell.cast("Tempest", on => me.target, ret => me.hasAura("Tempest")),
+      spell.cast("Tempest", on => me.target, ret => me.hasVisibleAura("Tempest")),
 
       // Spender at maelstrom threshold or MotE
       spell.cast("Earthquake", on => me.target, ret => {
@@ -156,7 +160,7 @@ export class ShamanElementalBehavior extends Behavior {
 
       // Filler: Stormkeeper + 2 targets still prefers Lightning Bolt
       spell.cast("Lightning Bolt", on => me.target, ret => {
-        return this.enemyCount === 2 && me.hasAura("Stormkeeper");
+        return this.enemyCount === 2 && me.hasVisibleAura("Stormkeeper");
       }),
       spell.cast("Chain Lightning", on => me.target, ret => this.enemyCount >= 2),
       spell.cast("Lightning Bolt", on => me.target)
@@ -169,7 +173,7 @@ export class ShamanElementalBehavior extends Behavior {
       spell.cast("Voltaic Blaze", on => me.target),
 
       // Tempest proc (Stormbringer AoE priority)
-      spell.cast("Tempest", on => me.target, ret => me.hasAura("Tempest")),
+      spell.cast("Tempest", on => me.target, ret => me.hasVisibleAura("Tempest")),
 
       // AoE spender
       spell.cast("Earthquake", on => me.target, ret => {

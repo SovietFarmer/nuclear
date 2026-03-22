@@ -50,7 +50,7 @@ export class JMRPROTECTIONPALA extends Behavior {
           common.waitForNotMounted(),
           common.waitForNotSitting(),
           common.waitForCastOrChannel(),
-          spell.cast("Devotion Aura", on => me, req => !me.hasVisibleAura(auras.devotionAura)),
+          spell.cast("Devotion Aura", on => me, req => !me.hasAura(auras.devotionAura)),
           spell.cast("Intercession",
             on => {
               const mouseoverGuid = wow.GameUI.mouseOverGuid;
@@ -109,18 +109,18 @@ export class JMRPROTECTIONPALA extends Behavior {
 
   standard() {
     return new bt.Selector(
-      spell.cast("Word of Glory", on => h.getPriorityTarget(), req => me.hasVisibleAura(auras.shiningLight)),
-      spell.cast("Hammer of Light", on => this.currentorbestTarget(), req => me.hasVisibleAura(auras.hammerOfLightReady)),
-      spell.cast("Sacred Weapon", on => me, req => !me.hasVisibleAura(auras.avengingWrath) && !me.hasVisibleAura(auras.sacredWeapon)),
+      spell.cast("Word of Glory", on => h.getPriorityTarget(), req => me.hasAuraByMe(auras.shiningLight)),
+      spell.cast("Hammer of Light", on => this.currentorbestTarget(), req => me.hasAuraByMe(auras.hammerOfLightReady)),
+      spell.cast("Sacred Weapon", on => me, req => !me.hasAuraByMe(auras.avengingWrath) && !me.hasAuraByMe(auras.sacredWeapon)),
       spell.cast("Judgment", on => this.getLowestRemainsJudgment(), req => this.isTemplar() && this.getLowestRemainsJudgment() !== null),
-      spell.cast("Shield of the Righteous", on => me, req => me.powerByType(PowerType.HolyPower) >= 3 || me.hasVisibleAura("Divine Purpose")),
+      spell.cast("Shield of the Righteous", on => me, req => me.powerByType(PowerType.HolyPower) >= 3 || me.hasAuraByMe("Divine Purpose")),
       spell.cast("Avenger's Shield", on => this.currentorbestTarget()),
       spell.cast("Judgment", on => this.getLowestRemainsJudgment(), req => this.getLowestRemainsJudgment() !== null),
       spell.cast("Divine Toll", on => this.currentorbestTarget(), req => me.powerByType(PowerType.HolyPower) === 0),
       spell.cast("Holy Bulwark", on => me),
       spell.cast("Blessed Hammer", on => me),
       spell.cast("Hammer of the Righteous", on => this.currentorbestTarget()),
-      spell.cast("Consecration", on => me, req => !me.hasVisibleAura(auras.consecration)),
+      spell.cast("Consecration", on => me, req => !me.hasAuraByMe(auras.consecration)),
     );
   }
 

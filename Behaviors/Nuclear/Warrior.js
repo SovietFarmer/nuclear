@@ -60,7 +60,7 @@ export class NuclearWarriorFuryBehavior extends NuclearWarrior {
       common.waitForCastOrChannel(),
       common.waitForFacing(),
       spell.cast("Victory Rush", () => me.pctHealth < 70),
-      spell.cast("Bloodthirst", () => me.pctHealth < 70 && me.hasVisibleAura("Enraged Regeneration")),
+      spell.cast("Bloodthirst", () => me.pctHealth < 70 && me.hasAuraByMe("Enraged Regeneration")),
       this.useCooldowns(),
       new bt.Decorator(
         () => Boolean(me.getUnitsAroundCount(8) >= 2),
@@ -78,8 +78,8 @@ export class NuclearWarriorFuryBehavior extends NuclearWarrior {
 
   useCooldowns() {
     return new bt.Selector(
-      spell.cast("Lights Judgment", () => Boolean(!me.hasAura("Recklessness"))),
-      spell.cast("Berserking", () => Boolean(me.hasAura("Recklessness"))),
+      spell.cast("Lights Judgment", () => Boolean(!me.hasVisibleAura("Recklessness"))),
+      spell.cast("Berserking", () => Boolean(me.hasVisibleAura("Recklessness"))),
       spell.cast("Blood Fury"),
       spell.cast("Fireblood"),
       spell.cast("Ancestral Call")
@@ -94,19 +94,19 @@ export class NuclearWarriorFuryBehavior extends NuclearWarrior {
         !me.hasAura(this.talentSpellIds.titansTorment)
       )),
       spell.cast("Avatar", () => Boolean(
-        (me.hasAura(this.talentSpellIds.titansTorment) && (me.hasAura("Enrage") || me.hasAura(this.talentSpellIds.titanicRage))) ||
+        (me.hasAura(this.talentSpellIds.titansTorment) && (me.hasVisibleAura("Enrage") || me.hasAura(this.talentSpellIds.titanicRage))) ||
         !me.hasAura(this.talentSpellIds.titansTorment)
       )),
-      spell.cast("Thunderous Roar", () => Boolean(me.hasAura("Enrage"))),
-      spell.cast("Champions Spear", () => Boolean(me.hasAura("Enrage"))),
+      spell.cast("Thunderous Roar", () => Boolean(me.hasVisibleAura("Enrage"))),
+      spell.cast("Champions Spear", () => Boolean(me.hasVisibleAura("Enrage"))),
       spell.cast("Odyn's Fury", () => Boolean(
         (this.getDebuffRemainingTime("385060") < 1 || !me.targetUnit.getAura(385060)) &&
-        (me.hasAura("Enrage") || me.hasAura(this.talentSpellIds.titanicRage)) &&
+        (me.hasVisibleAura("Enrage") || me.hasAura(this.talentSpellIds.titanicRage)) &&
         spell.getCooldown("Avatar").timeleft > 0
       )),
       spell.cast("Whirlwind", () => Boolean(this.getAuraStacks("Whirlwind") === 0 && me.hasAura(this.talentSpellIds.improvedWhirlwind))),
       spell.cast("Execute", () => Boolean(
-        me.hasAura("Enrage") &&
+        me.hasVisibleAura("Enrage") &&
         this.getAuraRemainingTime("Ashen Juggernaut") <= 1.5 &&
         me.hasAura(this.talentSpellIds.ashenJuggernaut)
       )),
@@ -115,16 +115,16 @@ export class NuclearWarriorFuryBehavior extends NuclearWarrior {
         spell.getCooldown("Bladestorm").timeleft <= 1.5 &&
         !me.targetUnit.hasAura("Champions Might")
       )),
-      spell.cast("Bladestorm", () => Boolean(me.hasAura("Enrage") && spell.getCooldown("Avatar").timeleft >= 9)),
-      spell.cast("Ravager", () => Boolean(me.hasAura("Enrage"))),
+      spell.cast("Bladestorm", () => Boolean(me.hasVisibleAura("Enrage") && spell.getCooldown("Avatar").timeleft >= 9)),
+      spell.cast("Ravager", () => Boolean(me.hasVisibleAura("Enrage"))),
       spell.cast("Rampage", () => Boolean(me.hasAura(this.talentSpellIds.angerManagement))),
-      spell.cast("Bloodbath", () => Boolean(me.hasAura("Furious Bloodthirst"))),
+      spell.cast("Bloodbath", () => Boolean(me.hasVisibleAura("Furious Bloodthirst"))),
       spell.cast("Crushing Blow"),
-      spell.cast("Onslaught", () => Boolean(me.hasAura(this.talentSpellIds.tenderize) || me.hasAura("Enrage"))),
+      spell.cast("Onslaught", () => Boolean(me.hasAura(this.talentSpellIds.tenderize) || me.hasVisibleAura("Enrage"))),
       spell.cast("Bloodbath", () => Boolean(!me.targetUnit.hasAuraByMe("Gushing Wound"))),
       spell.cast("Rampage", () => Boolean(me.hasAura(this.talentSpellIds.recklessAbandon))),
       spell.cast("Execute", () => Boolean(
-        me.hasAura("Enrage") &&
+        me.hasVisibleAura("Enrage") &&
         ((me.targetUnit.health.pct > 35 && me.hasAura(this.talentSpellIds.massacre)) || me.targetUnit.health.pct > 20) &&
         this.getAuraRemainingTime("Sudden Death") <= 1.5
       )),
@@ -138,83 +138,83 @@ export class NuclearWarriorFuryBehavior extends NuclearWarrior {
 
   singleTargetRotation() {
     return new bt.Selector(
-      spell.cast("Ravager", () => Boolean(spell.getCooldown("Recklessness").timeleft < 1.5 || me.hasAura("Recklessness"))),
+      spell.cast("Ravager", () => Boolean(spell.getCooldown("Recklessness").timeleft < 1.5 || me.hasVisibleAura("Recklessness"))),
       spell.cast("Recklessness", () => Boolean(
         !me.hasAura(this.talentSpellIds.angerManagement) ||
         (me.hasAura(this.talentSpellIds.angerManagement) && (spell.getCooldown("Avatar").ready || spell.getCooldown("Avatar").timeleft < 1.5 || spell.getCooldown("Avatar").timeleft > 30))
       )),
       spell.cast("Avatar", () => Boolean(
         !me.hasAura(this.talentSpellIds.titansTorment) ||
-        (me.hasAura(this.talentSpellIds.titansTorment) && (me.hasAura("Enrage") || me.hasAura(this.talentSpellIds.titanicRage)))
+        (me.hasAura(this.talentSpellIds.titansTorment) && (me.hasVisibleAura("Enrage") || me.hasAura(this.talentSpellIds.titanicRage)))
       )),
       spell.cast("Champions Spear", () => Boolean(
-        me.hasAura("Enrage") &&
-        ((me.hasAura("Furious Bloodthirst") && me.hasAura(this.talentSpellIds.titansTorment)) ||
+        me.hasVisibleAura("Enrage") &&
+        ((me.hasVisibleAura("Furious Bloodthirst") && me.hasAura(this.talentSpellIds.titansTorment)) ||
           !me.hasAura(this.talentSpellIds.titansTorment) ||
           me.targetUnit.timeToDie < 20 ||
           this.getEnemiesInRange(8) > 1)
       )),
       spell.cast("Whirlwind", () => Boolean(
-        (this.getEnemiesInRange(8) > 1 && me.hasAura(this.talentSpellIds.improvedWhirlwind) && !me.hasAura("Meat Cleaver")) ||
-        (this.timeToAdds() < 2 && me.hasAura(this.talentSpellIds.improvedWhirlwind) && !me.hasAura("Meat Cleaver"))
+        (this.getEnemiesInRange(8) > 1 && me.hasAura(this.talentSpellIds.improvedWhirlwind) && !me.hasVisibleAura("Meat Cleaver")) ||
+        (this.timeToAdds() < 2 && me.hasAura(this.talentSpellIds.improvedWhirlwind) && !me.hasVisibleAura("Meat Cleaver"))
       )),
       spell.cast("Execute", () => Boolean(
-        me.hasAura("Ashen Juggernaut") &&
+        me.hasVisibleAura("Ashen Juggernaut") &&
         this.getAuraRemainingTime("Ashen Juggernaut") < 1.5
       )),
       spell.cast("Bladestorm", () => Boolean(
-        me.hasAura("Enrage") &&
-        (me.hasAura("Avatar") || (me.hasAura("Recklessness") && me.hasAura(this.talentSpellIds.angerManagement)))
+        me.hasVisibleAura("Enrage") &&
+        (me.hasVisibleAura("Avatar") || (me.hasVisibleAura("Recklessness") && me.hasAura(this.talentSpellIds.angerManagement)))
       )),
       spell.cast("Odyns Fury", () => Boolean(
-        me.hasAura("Enrage") &&
+        me.hasVisibleAura("Enrage") &&
         (this.getEnemiesInRange(8) > 1 || this.timeToAdds() > 15) &&
         (me.hasAura(this.talentSpellIds.dancingBlades) && this.getAuraRemainingTime("Dancing Blades") < 5 || !me.hasAura(this.talentSpellIds.dancingBlades))
       )),
       spell.cast("Rampage", () => Boolean(
         me.hasAura(this.talentSpellIds.angerManagement) &&
-        (me.hasAura("Recklessness") || this.getAuraRemainingTime("Enrage") < 1.5 || me.rage > 85)
+        (me.hasVisibleAura("Recklessness") || this.getAuraRemainingTime("Enrage") < 1.5 || me.rage > 85)
       )),
       spell.cast("Bloodthirst", () => Boolean(
         (!me.hasAura(this.talentSpellIds.recklessAbandon) &&
-          me.hasAura("Furious Bloodthirst") &&
-          me.hasAura("Enrage") &&
-          (!me.targetUnit.hasAuraByMe("Gushing Wound") || me.hasAura("Champions Might")))
+          me.hasVisibleAura("Furious Bloodthirst") &&
+          me.hasVisibleAura("Enrage") &&
+          (!me.targetUnit.hasAuraByMe("Gushing Wound") || me.hasVisibleAura("Champions Might")))
       )),
-      spell.cast("Bloodbath", () => Boolean(me.hasAura("Furious Bloodthirst"))),
+      spell.cast("Bloodbath", () => Boolean(me.hasVisibleAura("Furious Bloodthirst"))),
       spell.cast("Thunderous Roar", () => Boolean(
-        me.hasAura("Enrage") &&
+        me.hasVisibleAura("Enrage") &&
         (this.getEnemiesInRange(8) > 1 || this.timeToAdds() > 15)
       )),
-      spell.cast("Onslaught", () => Boolean(me.hasAura("Enrage") || me.hasAura(this.talentSpellIds.tenderize))),
-      spell.cast("Crushing Blow", () => Boolean(me.hasAura("Enrage"))),
+      spell.cast("Onslaught", () => Boolean(me.hasVisibleAura("Enrage") || me.hasAura(this.talentSpellIds.tenderize))),
+      spell.cast("Crushing Blow", () => Boolean(me.hasVisibleAura("Enrage"))),
       spell.cast("Rampage", () => Boolean(
         me.hasAura(this.talentSpellIds.recklessAbandon) &&
-        (me.hasAura("Recklessness") || this.getAuraRemainingTime("Enrage") < 1.5 || me.rage > 85)
+        (me.hasVisibleAura("Recklessness") || this.getAuraRemainingTime("Enrage") < 1.5 || me.rage > 85)
       )),
       spell.cast("Execute", () => Boolean(
-        me.hasAura("Enrage") &&
-        !me.hasAura("Furious Bloodthirst") &&
-        me.hasAura("Ashen Juggernaut") ||
+        me.hasVisibleAura("Enrage") &&
+        !me.hasVisibleAura("Furious Bloodthirst") &&
+        me.hasVisibleAura("Ashen Juggernaut") ||
         this.getAuraRemainingTime("Sudden Death") <= 1.5 &&
         (me.targetUnit.health.pct > 35 && me.hasAura(this.talentSpellIds.massacre) || me.targetUnit.health.pct > 20)
       )),
-      spell.cast("Execute", () => Boolean(me.hasAura("Enrage"))),
+      spell.cast("Execute", () => Boolean(me.hasVisibleAura("Enrage"))),
       spell.cast("Rampage", () => Boolean(me.hasAura(this.talentSpellIds.angerManagement))),
       spell.cast("Bloodbath", () => Boolean(
-        me.hasAura("Enrage") &&
+        me.hasVisibleAura("Enrage") &&
         me.hasAura(this.talentSpellIds.recklessAbandon)
       )),
       spell.cast("Rampage", () => Boolean(me.targetUnit.health.pct < 35 && me.hasAura(this.talentSpellIds.massacre))),
-      spell.cast("Bloodthirst", () => Boolean(!me.hasAura("Enrage") || !me.hasAura("Furious Bloodthirst"))),
+      spell.cast("Bloodthirst", () => Boolean(!me.hasVisibleAura("Enrage") || !me.hasVisibleAura("Furious Bloodthirst"))),
       spell.cast("Raging Blow", () => Boolean(spell.getCharges("Raging Blow") > 1)),
       spell.cast("Crushing Blow", () => Boolean(spell.getCharges("Raging Blow") > 1)),
-      spell.cast("Bloodbath", () => Boolean(!me.hasAura("Enrage"))),
+      spell.cast("Bloodbath", () => Boolean(!me.hasVisibleAura("Enrage"))),
       spell.cast("Crushing Blow", () => Boolean(
-        me.hasAura("Enrage") &&
+        me.hasVisibleAura("Enrage") &&
         me.hasAura(this.talentSpellIds.recklessAbandon)
       )),
-      spell.cast("Bloodthirst", () => Boolean(!me.hasAura("Furious Bloodthirst"))),
+      spell.cast("Bloodthirst", () => Boolean(!me.hasVisibleAura("Furious Bloodthirst"))),
       spell.cast("Raging Blow", () => Boolean(spell.getCharges("Raging Blow") > 1)),
       spell.cast("Rampage"),
       spell.cast("Bloodbath"),
@@ -253,8 +253,8 @@ export class NuclearWarriorProtectionBehavior extends NuclearWarrior {
 
   useCooldowns() {
     return new bt.Selector(
-      spell.cast("Avatar", () => Boolean(!me.hasAura("Thunder Blast") || me.getAuraStacks("Thunder Blast") <= 2)),
-      spell.cast("Shield Wall", () => Boolean(me.hasAura("Immovable Object") && !me.hasAura("Avatar"))),
+      spell.cast("Avatar", () => Boolean(!me.hasVisibleAura("Thunder Blast") || me.getAuraStacks("Thunder Blast") <= 2)),
+      spell.cast("Shield Wall", () => Boolean(me.hasVisibleAura("Immovable Object") && !me.hasVisibleAura("Avatar"))),
       spell.cast("Blood Fury"),
       spell.cast("Berserking"),
       spell.cast("Arcane Torrent"),
@@ -262,10 +262,10 @@ export class NuclearWarriorProtectionBehavior extends NuclearWarrior {
       spell.cast("Fireblood"),
       spell.cast("Ancestral Call"),
       spell.cast("Bag of Tricks"),
-      spell.cast("Potion", () => Boolean(me.hasAura("Avatar") || (me.hasAura("Avatar") && me.targetUnit.health.pct <= 20))),
-      spell.cast("Last Stand", () => Boolean(this.shouldUseLastStand()) && !me.hasAura("Shield Wall")),
+      spell.cast("Potion", () => Boolean(me.hasVisibleAura("Avatar") || (me.hasVisibleAura("Avatar") && me.targetUnit.health.pct <= 20))),
+      spell.cast("Last Stand", () => Boolean(this.shouldUseLastStand()) && !me.hasVisibleAura("Shield Wall")),
       spell.cast("Ravager"),
-      spell.cast("Demoralizing Shout", () => Boolean(me.hasAura("Booming Voice"))),
+      spell.cast("Demoralizing Shout", () => Boolean(me.hasVisibleAura("Booming Voice"))),
       spell.cast("Spear of Bastion"),
       spell.cast("Thunderous Roar"),
       spell.cast("Shield Charge")
@@ -277,7 +277,7 @@ export class NuclearWarriorProtectionBehavior extends NuclearWarrior {
       spell.cast("Ignore Pain", () => Boolean(me.powerByType(PowerType.Rage) >= 90)),
       spell.cast("Shield Block", () => Boolean(this.getAuraRemainingTime("Shield Block") <= 10000)),
       spell.cast("Shield Wall", () => Boolean(me.health.pct <= 30)),
-      spell.cast("Last Stand", () => Boolean(me.health.pct <= 30) && !me.hasAura("Shield Wall")),
+      spell.cast("Last Stand", () => Boolean(me.health.pct <= 30) && !me.hasVisibleAura("Shield Wall")),
     );
   }
 
@@ -285,33 +285,33 @@ export class NuclearWarriorProtectionBehavior extends NuclearWarrior {
     return new bt.Selector(
       spell.cast("Thunder Blast", () => Boolean(this.getAuraRemainingTime("Rend") <= 1000)),
       spell.cast("Thunder Clap", () => Boolean(this.getAuraRemainingTime("Rend") <= 1000)),
-      spell.cast("Thunder Blast", () => Boolean(me.hasAura("Violent Outburst") && me.getUnitsAroundCount(8) >= 2 && me.hasAura("Avatar") && me.hasAura("Unstoppable Force"))),
-      spell.cast("Thunder Clap", () => Boolean(me.hasAura("Violent Outburst") && me.getUnitsAroundCount(8) >= 4 && me.hasAura("Avatar") && me.hasAura("Unstoppable Force") && me.hasAura("Crashing Thunder"))),
-      spell.cast("Thunder Clap", () => Boolean(me.hasAura("Violent Outburst") && me.getUnitsAroundCount(8) > 6 && me.hasAura("Avatar") && me.hasAura("Unstoppable Force"))),
-      spell.cast("Revenge", () => Boolean(me.powerByType(PowerType.Rage) >= 70 && me.hasAura("Seismic Reverberation") && me.getUnitsAroundCount(8) >= 3)),
-      spell.cast("Shield Slam", () => Boolean(me.powerByType(PowerType.Rage) <= 60 || me.hasAura("Violent Outburst") && me.getUnitsAroundCount(8) <= 4 && me.hasAura("Crashing Thunder"))),
+      spell.cast("Thunder Blast", () => Boolean(me.hasVisibleAura("Violent Outburst") && me.getUnitsAroundCount(8) >= 2 && me.hasVisibleAura("Avatar") && me.hasVisibleAura("Unstoppable Force"))),
+      spell.cast("Thunder Clap", () => Boolean(me.hasVisibleAura("Violent Outburst") && me.getUnitsAroundCount(8) >= 4 && me.hasVisibleAura("Avatar") && me.hasVisibleAura("Unstoppable Force") && me.hasVisibleAura("Crashing Thunder"))),
+      spell.cast("Thunder Clap", () => Boolean(me.hasVisibleAura("Violent Outburst") && me.getUnitsAroundCount(8) > 6 && me.hasVisibleAura("Avatar") && me.hasVisibleAura("Unstoppable Force"))),
+      spell.cast("Revenge", () => Boolean(me.powerByType(PowerType.Rage) >= 70 && me.hasVisibleAura("Seismic Reverberation") && me.getUnitsAroundCount(8) >= 3)),
+      spell.cast("Shield Slam", () => Boolean(me.powerByType(PowerType.Rage) <= 60 || me.hasVisibleAura("Violent Outburst") && me.getUnitsAroundCount(8) <= 4 && me.hasVisibleAura("Crashing Thunder"))),
       spell.cast("Thunder Blast"),
       spell.cast("Thunder Clap"),
-      spell.cast("Revenge", () => Boolean(me.powerByType(PowerType.Rage) >= 30 || me.powerByType(PowerType.Rage) >= 40 && me.hasAura("Barbaric Training")))
+      spell.cast("Revenge", () => Boolean(me.powerByType(PowerType.Rage) >= 30 || me.powerByType(PowerType.Rage) >= 40 && me.hasVisibleAura("Barbaric Training")))
     );
   }
 
   genericRotation() {
     return new bt.Selector(
-      spell.cast("Thunder Blast", () => Boolean(me.getAuraStacks("Thunder Blast") === 2 && me.getAuraStacks("Burst of Power") <= 1 && me.hasAura("Avatar") && me.hasAura("Unstoppable Force"))),
-      spell.cast("Shield Slam", () => Boolean(me.getAuraStacks("Burst of Power") === 2 && me.getAuraStacks("Thunder Blast") <= 1 || me.hasAura("Violent Outburst") || me.powerByType(PowerType.Rage) <= 70 && me.hasAura("Demolish"))),
-      spell.cast("Execute", () => Boolean(me.powerByType(PowerType.Rage) >= 70 || me.powerByType(PowerType.Rage) >= 40 && spell.getCooldown("Shield Slam").remaining && me.hasAura("Demolish") || me.powerByType(PowerType.Rage) >= 50 && spell.getCooldown("Shield Slam").remaining || me.hasAura("Sudden Death") && me.hasAura("Sudden Death"))),
+      spell.cast("Thunder Blast", () => Boolean(me.getAuraStacks("Thunder Blast") === 2 && me.getAuraStacks("Burst of Power") <= 1 && me.hasVisibleAura("Avatar") && me.hasVisibleAura("Unstoppable Force"))),
+      spell.cast("Shield Slam", () => Boolean(me.getAuraStacks("Burst of Power") === 2 && me.getAuraStacks("Thunder Blast") <= 1 || me.hasVisibleAura("Violent Outburst") || me.powerByType(PowerType.Rage) <= 70 && me.hasVisibleAura("Demolish"))),
+      spell.cast("Execute", () => Boolean(me.powerByType(PowerType.Rage) >= 70 || me.powerByType(PowerType.Rage) >= 40 && spell.getCooldown("Shield Slam").remaining && me.hasVisibleAura("Demolish") || me.powerByType(PowerType.Rage) >= 50 && spell.getCooldown("Shield Slam").remaining || me.hasVisibleAura("Sudden Death") && me.hasVisibleAura("Sudden Death"))),
       spell.cast("Shield Slam"),
-      spell.cast("Thunder Blast", () => Boolean(this.getAuraRemainingTime("Rend") <= 2 && !me.hasAura("Violent Outburst"))),
+      spell.cast("Thunder Blast", () => Boolean(this.getAuraRemainingTime("Rend") <= 2 && !me.hasVisibleAura("Violent Outburst"))),
       spell.cast("Thunder Blast"),
-      spell.cast("Thunder Clap", () => Boolean(this.getAuraRemainingTime("Rend") <= 2 && !me.hasAura("Violent Outburst"))),
-      spell.cast("Thunder Blast", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && !me.hasAura("Violent Outburst"))),
-      spell.cast("Thunder Clap", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && !me.hasAura("Violent Outburst"))),
-      //spell.cast("Revenge", () => Boolean(me.powerByType(PowerType.Rage) >= 80 && me.targetUnit.health.pct > 20 || me.hasAura("Revenge") && me.targetUnit.health.pct <= 20 && me.powerByType(PowerType.Rage) <= 18 && spell.getCooldown("Shield Slam").remaining || me.hasAura("Revenge") && me.targetUnit.health.pct > 20 || me.powerByType(PowerType.Rage) >= 80 && me.targetUnit.health.pct > 35 || me.hasAura("Revenge") && me.targetUnit.health.pct <= 35 && me.powerByType(PowerType.Rage) <= 18 && spell.getCooldown("Shield Slam").remaining || me.hasAura("Revenge") && me.targetUnit.health.pct > 35 && me.hasAura("Massacre"))),
+      spell.cast("Thunder Clap", () => Boolean(this.getAuraRemainingTime("Rend") <= 2 && !me.hasVisibleAura("Violent Outburst"))),
+      spell.cast("Thunder Blast", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && !me.hasVisibleAura("Violent Outburst"))),
+      spell.cast("Thunder Clap", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && !me.hasVisibleAura("Violent Outburst"))),
+      //spell.cast("Revenge", () => Boolean(me.powerByType(PowerType.Rage) >= 80 && me.targetUnit.health.pct > 20 || me.hasVisibleAura("Revenge") && me.targetUnit.health.pct <= 20 && me.powerByType(PowerType.Rage) <= 18 && spell.getCooldown("Shield Slam").remaining || me.hasVisibleAura("Revenge") && me.targetUnit.health.pct > 20 || me.powerByType(PowerType.Rage) >= 80 && me.targetUnit.health.pct > 35 || me.hasVisibleAura("Revenge") && me.targetUnit.health.pct <= 35 && me.powerByType(PowerType.Rage) <= 18 && spell.getCooldown("Shield Slam").remaining || me.hasVisibleAura("Revenge") && me.targetUnit.health.pct > 35 && me.hasVisibleAura("Massacre"))),
       spell.cast("Execute"),
       spell.cast("Revenge"),
-      spell.cast("Thunder Blast", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && me.hasAura("Violent Outburst"))),
-      spell.cast("Thunder Clap", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && me.hasAura("Violent Outburst"))),
+      spell.cast("Thunder Blast", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && me.hasVisibleAura("Violent Outburst"))),
+      spell.cast("Thunder Clap", () => Boolean(me.getUnitsAroundCount(8) >= 1 || spell.getCooldown("Shield Slam").remaining && me.hasVisibleAura("Violent Outburst"))),
       spell.cast("Devastate")
     );
   }
@@ -320,7 +320,7 @@ export class NuclearWarriorProtectionBehavior extends NuclearWarrior {
     return (
       (me.targetUnit.health.pct >= 90 && me.hasTalent("Unnerving Focus")) ||
       (me.targetUnit.health.pct <= 20 && me.hasTalent("Unnerving Focus")) ||
-      me.hasAura("Bolster") ||
+      me.hasVisibleAura("Bolster") ||
       me.health.pct <= 30
     );
   }

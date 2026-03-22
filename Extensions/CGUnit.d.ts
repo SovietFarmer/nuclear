@@ -27,6 +27,8 @@ declare namespace wow {
     isRooted(): boolean;
     isSilenced(): boolean;
     isFeared(): boolean;
+    /** True when unit cannot cast (stun, silence, pacify, fear, confuse, NO_ACTIONS). */
+    isUnableToCast(): boolean;
     angleToXY(x1: number, y1: number, x2: number, y2: number): number;
     angleToPos(from: Vector3, to: Vector3): number;
     angleTo(target: CGUnit): number;

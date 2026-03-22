@@ -42,6 +42,12 @@ export class PriestDisciplinePvP extends Behavior {
   lastMajorHealCDTime = 0;
   _lastUPTime = 0;
 
+  /** One incoming-CC scan per frame: fewer native reads + isolated failures (see _refreshIncomingCcCache). */
+  _incomingCcCacheFrame = -1;
+  _incomingCcCache = { swdTarget: undefined, fadeIncoming: false, stopCast: false };
+  /** Throttle repetitive console lines during long casts (ms). */
+  _incomingCcLogThrottleUntil = 0;
+
   // Enemy CC tracking for predictive Fade
   enemyCCTracker = new Map(); // Track enemy GUID -> { spellId: timestamp }
 
@@ -60,6 +66,7 @@ export class PriestDisciplinePvP extends Behavior {
       header: "Enhanced PVP Features",
       options: [
         { type: "checkbox", uid: "UseAdvancedShadowWordDeath", text: "Use Advanced Shadow Word: Death (any enemy in range)", default: true },
+        { type: "checkbox", uid: "UseShadowWordDeathForCCD", text: "Shadow Word: Death — incoming CC interrupt", default: true },
         { type: "checkbox", uid: "UseFadeForReflectSpells", text: "Use Fade for pvpReflect spells", default: true },
         { type: "checkbox", uid: "UsePreemptiveFade", text: "Use Preemptive Fade (predict enemy CC)", default: true },
         { type: "checkbox", uid: "UseSmartMindControl", text: "Use Smart Mind Control (enemy healer)", default: true },
@@ -105,17 +112,23 @@ export class PriestDisciplinePvP extends Behavior {
       new bt.Decorator(
         ret => !spell.isGlobalCooldown(),
         new bt.Selector(
-          // High priority Shadow Word: Death for incoming CC
-          spell.cast("Shadow Word: Death", on => this.findIncomingCCTarget(), ret =>
-            this.findIncomingCCTarget() !== undefined && !spell.isOnCooldown("Shadow Word: Death")
-          ),
+          // High priority Shadow Word: Death for incoming CC (single cached target per frame — see _refreshIncomingCcCache)
+          spell.cast("Shadow Word: Death", on => this.findIncomingCCTarget(), ret => {
+            const t = this.findIncomingCCTarget();
+            return Settings.UseShadowWordDeathForCCD && t != null && !spell.isOnCooldown("Shadow Word: Death");
+          }),
           spell.cast("Fade", () =>
-            this.hasIncomingCCForFade() && !spell.isOnCooldown("Fade")
+            this.canAttemptFadeCast() &&
+            this.hasIncomingCCForFade() &&
+            !spell.isOnCooldown("Fade")
           ),
 
           // Preemptive Fade for predicted enemy CC (priest within 8y, rogue within 4y)
           spell.cast("Fade", () =>
-            Settings.UsePreemptiveFade && !spell.isOnCooldown("Fade") && this.shouldPreemptiveFade()
+            this.canAttemptFadeCast() &&
+            Settings.UsePreemptiveFade &&
+            !spell.isOnCooldown("Fade") &&
+            this.shouldPreemptiveFade()
           ),
 
           common.waitForCastOrChannel(),
@@ -168,37 +181,95 @@ export class PriestDisciplinePvP extends Behavior {
       return false;
     }
 
-    // Check for incoming CC spells targeting us
-    const enemies = me.getEnemies();
-    for (const enemy of enemies) {
-      if (!enemy.isCastingOrChanneling || !enemy.spellInfo) {
-        continue;
-      }
+    this._refreshIncomingCcCache();
+    return this._incomingCcCache.stopCast;
+  }
 
-      const spellInfo = enemy.spellInfo;
-      const target = spellInfo.spellTargetGuid;
+  /**
+   * Shared per-frame scan for incoming CC on us (SW:D target, Fade, stop-cast).
+   * Caches on wow.frameTime so multiple calls in one frame only enumerate enemies once.
+   * Per-enemy try/catch avoids one bad unit breaking the whole tree (access violations).
+   */
+  _refreshIncomingCcCache() {
+    const frame = wow.frameTime;
+    if (this._incomingCcCacheFrame === frame) {
+      return;
+    }
+    this._incomingCcCacheFrame = frame;
+    this._incomingCcCache = { swdTarget: undefined, fadeIncoming: false, stopCast: false };
 
-      // Check if the spell is targeting us
-      if (!target || !target.equals(me.guid)) {
-        continue;
-      }
-
-      const spellId = spellInfo.spellCastId;
-      const castTimeRemaining = spellInfo.castEnd - wow.frameTime;
-
-      // Only react if the cast will finish soon (within 1 second)
-      if (castTimeRemaining > 1000) {
-        continue;
-      }
-
-      // Check if it's a CC spell we should counter
-      if (this.isCCSpellWeCanCounter(spellId, swdReady, fadeReady)) {
-        console.log(`[Priest] Detected incoming CC ${spellId} from ${enemy.unsafeName}, casting time remaining: ${castTimeRemaining}ms`);
-        return true;
-      }
+    if (!me) {
+      return;
     }
 
-    return false;
+    let enemies;
+    try {
+      enemies = me.getEnemies();
+    } catch {
+      return;
+    }
+
+    const swdReady = !spell.isOnCooldown("Shadow Word: Death");
+    const fadeReady = !spell.isOnCooldown("Fade");
+
+    for (const enemy of enemies) {
+      try {
+        if (!enemy.isCastingOrChanneling || !enemy.spellInfo) {
+          continue;
+        }
+
+        const spellInfo = enemy.spellInfo;
+        const target = spellInfo.spellTargetGuid;
+
+        if (!target || !target.equals(me.guid)) {
+          continue;
+        }
+
+        const spellId = spellInfo.spellCastId;
+        const castTimeRemaining = spellInfo.castEnd - wow.frameTime;
+
+        if (castTimeRemaining > 1500) {
+          continue;
+        }
+
+        // Fade window: ≤1500ms (unchanged from hasIncomingCCForFade)
+        if (castTimeRemaining <= 1500 && this.isCCSpellWeCanCounter(spellId, false, true)) {
+          if (!this._incomingCcCache.fadeIncoming) {
+            this._maybeThrottleIncomingCcLog(
+              `[Priest] Fade counter for incoming CC: ${spellId} from ${enemy.unsafeName}`
+            );
+          }
+          this._incomingCcCache.fadeIncoming = true;
+        }
+
+        // Stop-cast + SW:D window: ≤1000ms
+        if (castTimeRemaining <= 1000) {
+          if (this.isCCSpellWeCanCounter(spellId, swdReady, fadeReady)) {
+            this._incomingCcCache.stopCast = true;
+            this._maybeThrottleIncomingCcLog(
+              `[Priest] Detected incoming CC ${spellId} from ${enemy.unsafeName}, casting time remaining: ${castTimeRemaining}ms`
+            );
+          }
+          if (this.isCCSpellWeCanCounter(spellId, true, false) && !this._incomingCcCache.swdTarget) {
+            this._incomingCcCache.swdTarget = enemy;
+            this._maybeThrottleIncomingCcLog(
+              `[Priest] Shadow Word: Death counter target: ${enemy.unsafeName} casting ${spellId}`
+            );
+          }
+        }
+      } catch {
+        // Stale CGUnit / spellInfo reads — skip this enemy
+      }
+    }
+  }
+
+  _maybeThrottleIncomingCcLog(message) {
+    const now = wow.frameTime;
+    if (now < this._incomingCcLogThrottleUntil) {
+      return;
+    }
+    this._incomingCcLogThrottleUntil = now + 500;
+    console.log(message);
   }
 
   isCCSpellWeCanCounter(spellId, swdReady, fadeReady) {
@@ -323,71 +394,32 @@ export class PriestDisciplinePvP extends Behavior {
   }
 
   findIncomingCCTarget() {
-    // Find the enemy casting CC on us for Shadow Word: Death counter
-    const enemies = me.getEnemies();
-    for (const enemy of enemies) {
-      if (!enemy.isCastingOrChanneling || !enemy.spellInfo) {
-        continue;
-      }
+    this._refreshIncomingCcCache();
+    return this._incomingCcCache.swdTarget;
+  }
 
-      const spellInfo = enemy.spellInfo;
-      const target = spellInfo.spellTargetGuid;
-
-      // Check if the spell is targeting us
-      if (!target || !target.equals(me.guid)) {
-        continue;
-      }
-
-      const spellId = spellInfo.spellCastId;
-      const castTimeRemaining = spellInfo.castEnd - wow.frameTime;
-
-      // Only counter if the cast will finish very soon (within 1000ms)
-      if (castTimeRemaining > 1000) {
-        continue;
-      }
-
-      // Check if it's a CC spell we can counter with Shadow Word: Death
-      if (this.isCCSpellWeCanCounter(spellId, true, false)) {
-        console.log(`[Priest] Shadow Word: Death counter target: ${enemy.unsafeName} casting ${spellId}`);
-        return enemy;
-      }
+  /**
+   * Incoming-CC Fade: skip if SW:D should handle the same threat (not both).
+   * Uses cached swdTarget + canCast so Fade still works when SW:D cannot fire.
+   */
+  incomingCCShouldDeferFadeToShadowWordDeath() {
+    if (!Settings.UseShadowWordDeathForCCD || spell.isOnCooldown("Shadow Word: Death")) {
+      return false;
     }
-
-    return undefined;
+    const target = this._incomingCcCache.swdTarget;
+    if (!target) {
+      return false;
+    }
+    const swd = spell.getSpell("Shadow Word: Death");
+    return !!(swd && spell.canCast(swd, target, {}));
   }
 
   hasIncomingCCForFade() {
-    // Check if there's incoming CC that Fade can counter
-    const enemies = me.getEnemies();
-    for (const enemy of enemies) {
-      if (!enemy.isCastingOrChanneling || !enemy.spellInfo) {
-        continue;
-      }
-
-      const spellInfo = enemy.spellInfo;
-      const target = spellInfo.spellTargetGuid;
-
-      // Check if the spell is targeting us
-      if (!target || !target.equals(me.guid)) {
-        continue;
-      }
-
-      const spellId = spellInfo.spellCastId;
-      const castTimeRemaining = spellInfo.castEnd - wow.frameTime;
-
-      // Only counter if the cast will finish soon (within 1.5 seconds)
-      if (castTimeRemaining > 1500) {
-        continue;
-      }
-
-      // Check if it's a CC spell we can counter with Fade
-      if (this.isCCSpellWeCanCounter(spellId, false, true)) {
-        console.log(`[Priest] Fade counter for incoming CC: ${spellId} from ${enemy.unsafeName}`);
-        return true;
-      }
+    this._refreshIncomingCcCache();
+    if (this.incomingCCShouldDeferFadeToShadowWordDeath()) {
+      return false;
     }
-
-    return false;
+    return this._incomingCcCache.fadeIncoming;
   }
 
   trackEnemyCC() {
@@ -484,7 +516,6 @@ export class PriestDisciplinePvP extends Behavior {
         const timeSinceLastUse = lastPsychicScream ? currentTime - lastPsychicScream : 999999;
 
         if (timeSinceLastUse > 29000) { // 29+ seconds since last use (30s cooldown)
-          console.log(`[Priest] Preemptive Fade - Enemy priest ${enemy.unsafeName} within 8y, Psychic Scream ready (${Math.floor(timeSinceLastUse / 1000)}s ago)`);
           return true;
         }
       }
@@ -506,8 +537,6 @@ export class PriestDisciplinePvP extends Behavior {
         const timeSinceKidneyShot = lastKidneyShot ? currentTime - lastKidneyShot : 999999;
 
         if (timeSinceCheapShot > 29000 || timeSinceKidneyShot > 19000) { // Cheap Shot 30s, Kidney Shot 20s
-          const readyAbility = timeSinceCheapShot > 29000 ? "Cheap Shot" : "Kidney Shot";
-          console.log(`[Priest] Preemptive Fade - Enemy rogue ${enemy.unsafeName} within 4y, ${readyAbility} ready`);
           return true;
         }
       }
@@ -531,7 +560,6 @@ export class PriestDisciplinePvP extends Behavior {
         const timeSinceTrap3 = lastTrap3 ? currentTime - lastTrap3 : 999999;
 
         if (timeSinceTrap > 29000 || timeSinceTrap2 > 29000 || timeSinceTrap3 > 29000) { // Trap 30s
-          console.log(`[Priest] Preemptive Fade - Enemy hunter ${enemy.unsafeName} within 4y, Trap ready`);
           return true;
         }
       }
@@ -552,7 +580,6 @@ export class PriestDisciplinePvP extends Behavior {
             const timeSinceIntimidation = lastIntimidation ? currentTime - lastIntimidation : 999999;
 
             if (timeSinceIntimidation > 29000) { // Intimidation 30s
-              console.log(`[Priest] Preemptive Fade - Enemy hunter ${enemy.unsafeName} has pet within 8y, Intimidation ready`);
               return true;
             }
           }
@@ -577,7 +604,8 @@ export class PriestDisciplinePvP extends Behavior {
         return bt.Status.Failure; // Proceed to next child
       }),
       spell.cast("Power Word: Life", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 50),
-      spell.cast("Desperate Prayer", on => me, ret => me.effectiveHealthPercent < 40 && !this.usedMajorHealCDRecently(me)),
+      spell.cast("Desperate Prayer", on => me, ret =>
+        spell.isSpellKnown("Desperate Prayer") && me.effectiveHealthPercent < 40 && !this.usedMajorHealCDRecently(me)),
       spell.cast("Pain Suppression", on => this.healTarget, ret => this.shouldUsePainSuppression(this.healTarget), {
         callback: () => {
           this.updateDefensiveCooldownTime("Pain Suppression");
@@ -631,7 +659,11 @@ export class PriestDisciplinePvP extends Behavior {
       spell.cast("Shadow Word: Death", on => this.findAdvancedShadowWordDeathTarget(), ret =>
         Settings.UseAdvancedShadowWordDeath === true && this.findAdvancedShadowWordDeathTarget() !== undefined
       ),
-      spell.cast("Fade", () => Settings.UseFadeForReflectSpells === true && this.shouldUseFadeForReflectSpells()),
+      spell.cast("Fade", () =>
+        this.canAttemptFadeCast() &&
+        Settings.UseFadeForReflectSpells === true &&
+        this.shouldUseFadeForReflectSpells()
+      ),
       spell.cast("Power Infusion", on => this.findPowerInfusionTarget(), ret =>
         Settings.UseAutoPowerInfusion === true && this.findPowerInfusionTarget() !== undefined
       ),
@@ -740,7 +772,7 @@ export class PriestDisciplinePvP extends Behavior {
 
     const window = 2500;
     if (spell.getTimeSinceLastCast("Pain Suppression") < window) return true;
-    if (spell.getTimeSinceLastCast("Desperate Prayer") < window) return true;
+    if (spell.isSpellKnown("Desperate Prayer") && spell.getTimeSinceLastCast("Desperate Prayer") < window) return true;
     if (spell.getTimeSinceLastCast("Evangelism") < window) return true;
     if (spell.isSpellKnown("Power Word: Barrier") && spell.getTimeSinceLastCast("Power Word: Barrier") < window) return true;
     if (spell.isSpellKnown("Void Shift") && spell.getTimeSinceLastCast("Void Shift") < window) return true;
@@ -749,6 +781,11 @@ export class PriestDisciplinePvP extends Behavior {
 
   shouldUsePainSuppression(target) {
     if (!target) return false;
+    // Pain Suppression can be cast while stunned. If we're NOT stunned, use full lockout check
+    // (me.isUnableToCast includes silence, pacify, fear, confuse, stun, NO_ACTIONS).
+    if (!me) return false;
+    if (!me.isStunned() && me.isUnableToCast()) return false;
+
     if (this.usedMajorHealCDRecently(target)) return false;
 
     if (target.hasAura("Ice Block") || target.hasAura("Divine Shield")) {
@@ -777,6 +814,14 @@ export class PriestDisciplinePvP extends Behavior {
     }
 
     return true;
+  }
+
+  /**
+   * Fade and similar utility casts: do not spam while silenced/stunned/etc.
+   * Unlike Pain Suppression (see shouldUsePainSuppression), Fade has no stun bypass — you cannot Fade while stunned.
+   */
+  canAttemptFadeCast() {
+    return !(!me || me.isUnableToCast());
   }
 
   shouldUseVoidShift(target) {
@@ -957,6 +1002,9 @@ export class PriestDisciplinePvP extends Behavior {
   // Enhanced PVP Methods
 
   findPowerInfusionTarget() {
+    if (!me || me.isUnableToCast()) {
+      return undefined;
+    }
     // Check cooldown first
     if (spell.isOnCooldown("Power Infusion")) {
       return undefined;
@@ -1016,11 +1064,6 @@ export class PriestDisciplinePvP extends Behavior {
       }
     }
 
-    if (bestTarget) {
-      const majorCooldown = pvpHelpers.hasMajorDamageCooldown(bestTarget, 3);
-      console.log(`[Priest] Power Infusion on ${bestTarget.unsafeName} with ${majorCooldown.name} (${majorCooldown.remainingTime.toFixed(1)}s remaining)`);
-    }
-
     return bestTarget;
   }
 
@@ -1063,12 +1106,10 @@ export class PriestDisciplinePvP extends Behavior {
               if (swdReady) {
                 const isBlacklistedSpell = spellBlacklist[spellId];
                 if (isBlacklistedSpell) {
-                  console.log(`[Priest] Not using Fade for ${spellId} from ${enemy.unsafeName} - SW:D ready for blacklist spell`);
                   continue; // Skip this spell, let SW:D handle it
                 }
               }
 
-              console.log(`[Priest] Using Fade for reflect spell ${spellId} from ${enemy.unsafeName} (SW:D ready: ${swdReady})`);
               return true;
             }
           }
@@ -1079,6 +1120,7 @@ export class PriestDisciplinePvP extends Behavior {
   }
 
   shouldUseVoidTendrils() {
+    if (!me || me.isUnableToCast()) return false;
     if (!spell.isSpellKnown("Void Tendrils")) return false;
     if (spell.isOnCooldown("Void Tendrils")) {
       return false;
@@ -1092,13 +1134,15 @@ export class PriestDisciplinePvP extends Behavior {
     );
 
     if (eligibleEnemies.length >= 2) {
-      console.log(`[Priest] Using Void Tendrils - ${eligibleEnemies.length} enemies within 8 yards`);
       return true;
     }
     return false;
   }
 
   findMindControlTarget() {
+    if (!me || me.isUnableToCast()) {
+      return undefined;
+    }
     // Check cooldown first
     if (spell.isOnCooldown("Mind Control")) {
       return undefined;
@@ -1131,7 +1175,6 @@ export class PriestDisciplinePvP extends Behavior {
         drTracker.getDRStacks(enemy.guid, "disorient") <= Settings.MindControlMaxDR &&
         !pvpHelpers.hasImmunity(enemy)) {
 
-        console.log(`[Priest] Mind Control conditions met - targeting ${enemy.unsafeName}`);
         return enemy;
       }
     }
@@ -1141,6 +1184,10 @@ export class PriestDisciplinePvP extends Behavior {
   findMindControlDPSTarget() {
     // Check if the setting is enabled first
     if (Settings.UseMindControlDPS !== true) {
+      return undefined;
+    }
+
+    if (!me || me.isUnableToCast()) {
       return undefined;
     }
 
@@ -1167,7 +1214,6 @@ export class PriestDisciplinePvP extends Behavior {
         // Check if this enemy has major cooldowns active
         const majorCooldown = pvpHelpers.hasMajorDamageCooldown(enemy, 3);
         if (majorCooldown) {
-          console.log(`[Priest] Mind Control DPS conditions met - targeting ${enemy.unsafeName} with major CD`);
           return enemy;
         }
       }

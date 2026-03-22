@@ -16,7 +16,7 @@ import objMgr from "@/Core/ObjectManager";
 const auras = {
   // Buffs
   lifebloom: 33763,
-  lifebloomResto: 188550, // Resto-specific Lifebloom ID
+  lifebloomResto: 1227806, // Midnight Resto-specific Lifebloom ID
   rejuvenation: 774,
   rejuvenationGermination: 155777,
   regrowth: 8936,
@@ -302,8 +302,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       new bt.Decorator(
         () => me.inCombat() && me.target && me.canAttack(me.target) && !me.target.isImmune() &&
               me.distanceTo(me.target) > 8 &&
-              !me.hasVisibleAura(432031) &&
-              (me.hasVisibleAura(auras.catForm) || me.hasVisibleAura(auras.bearForm)),
+              !me.hasAuraByMe(432031) &&
+              (me.hasAuraByMe(auras.catForm) || me.hasAuraByMe(auras.bearForm)),
         new bt.Action(() => {
           this.cancelCurrentForm();
           return bt.Status.Success;
@@ -312,7 +312,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       ),
 
       new bt.Decorator(
-        () => me.hasVisibleAura(auras.catForm) && !me.inCombat() && !me.hasVisibleAura(auras.prowl) && spell.getCooldown(5215).ready && !me.isCastingOrChanneling,
+        () => me.hasAuraByMe(auras.catForm) && !me.inCombat() && !me.hasAuraByMe(auras.prowl) && spell.getCooldown(5215).ready && !me.isCastingOrChanneling,
         new bt.Action(() => {
           const prowlSpell = spell.getSpell(5215);
           if (prowlSpell && this.getCurrentTarget() === null) {
@@ -362,7 +362,7 @@ export class JmrRestoDruidBehavior extends Behavior {
           spell.cast("Symbiotic Relationship", on => this.getSymbioticRelationshipTarget(), req =>
             Settings.UseSymbioticRelationship &&
             this.getSymbioticRelationshipTarget() !== null &&
-            !me.hasVisibleAura(474754) &&
+            !me.hasAuraByMe(474754) &&
             me.getFriends(40).length > 2 &&
             !spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Symbiotic Relationship") &&
             !this.getSymbioticRelationshipTarget().inCombat() &&
@@ -373,12 +373,18 @@ export class JmrRestoDruidBehavior extends Behavior {
           spell.cast("Mark of the Wild", on => this.getMarkOfTheWildTarget(), req =>
             Settings.MaintainMarkOfTheWild &&
             this.getMarkOfTheWildTarget() !== null &&
-            !spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Mark of the Wild")
+            spell.getTimeSinceLastCast("Mark of the Wild") > 10000
           ),
 
-        // Nature's Cure for dispels
-        spell.dispel("Nature's Cure", true, DispelPriority.Low, true, WoWDispelType.Magic, WoWDispelType.Curse, WoWDispelType.Poison),
+        // Nature's Cure for dispels (Magic, Curse, Poison on friends)
+        new bt.Decorator(
+          () => Settings.UseNaturesCure && spell.isSpellKnown("Nature's Cure"),
+          spell.dispel("Nature's Cure", true, DispelPriority.Low, true, WoWDispelType.Magic, WoWDispelType.Curse, WoWDispelType.Poison)
+        ),
+        // Nature's Cure for specific mythic debuffs (high priority override)
         spell.cast("Nature's Cure", on => this.findFriendWithMythicDebuff(), req =>
+            Settings.UseNaturesCure &&
+            spell.isSpellKnown("Nature's Cure") &&
             this.findFriendWithMythicDebuff() !== null
         ),
         spell.dispel("Soothe", false, DispelPriority.Low, false, WoWDispelType.Enrage),
@@ -430,13 +436,13 @@ export class JmrRestoDruidBehavior extends Behavior {
 
   // Helper function to cancel current form aura
   cancelCurrentForm() {
-    if (me.hasVisibleAura(auras.catForm)) {
+    if (me.hasAuraByMe(auras.catForm)) {
       const catFormAura = me.getAura(auras.catForm);
       if (catFormAura) {
         me.cancelAura(catFormAura.spellId);
         return true;
       }
-    } else if (me.hasVisibleAura(auras.bearForm)) {
+    } else if (me.hasAuraByMe(auras.bearForm)) {
       const bearFormAura = me.getAura(auras.bearForm);
       if (bearFormAura) {
         me.cancelAura(bearFormAura.spellId);
@@ -464,8 +470,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Barkskin", () =>
         Settings.UseBarkskin &&
         me.effectiveHealthPercent <= Settings.BarkskinHealthPct &&
-        !me.hasVisibleAura(auras.barkskin) &&
-        !me.hasVisibleAura(102342) &&
+        !me.hasAuraByMe(auras.barkskin) &&
+        !me.hasAuraByMe(102342) &&
         me.inCombat()
       ),
 
@@ -500,7 +506,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     return new bt.Selector(
        // Cancel any form when ramp is active (unless form-locked)
        new bt.Action(() => {
-         if (!me.hasVisibleAura(432031)) {
+         if (!me.hasAuraByMe(432031)) {
            if (this.cancelCurrentForm()) {
              return bt.Status.Success;
            }
@@ -536,7 +542,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       ),
 
       // 3. Wild Growth (regardless of health -- procs Grove Guardians passively)
-      spell.cast("Wild Growth", req => !me.isMoving() || me.hasVisibleAura("Nature's Swiftness")),
+      spell.cast("Wild Growth", req => !me.isMoving() || me.hasAuraByMe("Nature's Swiftness")),
 
       // 4. Lifebloom during ramp (respects global Lifebloom limits)
       spell.cast("Lifebloom", on => this.getRampLifebloomTarget(), req =>
@@ -553,7 +559,7 @@ export class JmrRestoDruidBehavior extends Behavior {
 
       // 5b. Me (if I don't have Rejuvenation)
       spell.cast("Rejuvenation", on => me, req =>
-        !me.hasVisibleAuraByMe(auras.rejuvenation)
+        !me.hasAura(auras.rejuvenation)
       ),
 
       // 5c. Any tank without Rejuvenation
@@ -580,7 +586,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Convoke the Spirits", req =>
         Settings.UseConvoke &&
         spell.isSpellKnown("Convoke the Spirits") &&
-        !me.hasVisibleAura(auras.catForm) &&
+        !me.hasAuraByMe(auras.catForm) &&
         !spell.isOnCooldown("Convoke the Spirits")
       ),
 
@@ -589,7 +595,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
         this.getRegrowthTarget() !== null &&
         this.getAbundanceStacks() >= 5 &&
-        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness") || me.hasAura("Incarnation: Tree of Life"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness") || me.hasVisibleAura("Incarnation: Tree of Life"))
       ),
     );
   }
@@ -627,7 +633,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Incarnation: Tree of Life", () =>
         Settings.UseIncarnation &&
         spell.isSpellKnown("Incarnation: Tree of Life") &&
-        !me.hasVisibleAura(auras.catForm) &&
+        !me.hasAuraByMe(auras.catForm) &&
         this.getFriendsUnderHealthPercent(Settings.IncarnationHealthPct).length >= Settings.IncarnationMinTargets
       ),
 
@@ -635,7 +641,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Convoke the Spirits", () =>
         Settings.UseConvoke &&
         spell.isSpellKnown("Convoke the Spirits") &&
-        !me.hasVisibleAura(auras.catForm) &&
+        !me.hasAuraByMe(auras.catForm) &&
         this.getFriendsUnderHealthPercent(Settings.ConvokeHealthPct).length >= Settings.ConvokeMinTargets
       ),
 
@@ -684,27 +690,27 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Wild Growth", () =>
         Settings.UseWildGrowthHealing &&
         this.getFriendsUnderHealthPercent(Settings.WildGrowthHealingHealthPct).length >= Settings.WildGrowthHealingMinTargets &&
-        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness"))
       ),
 
       // Regrowth with Omen of Clarity (free cast)
       spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
         me.hasAura(auras.omenOfClarity) &&
         this.getRegrowthTarget() !== null &&
-        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness"))
       ),
 
       // Regrowth with high Abundance stacks (100% crit, near-free mana)
       spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
         this.getAbundanceStacks() >= 8 &&
         this.getRegrowthTarget() !== null &&
-        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness"))
       ),
 
       // Wild Growth for group healing
       spell.cast("Wild Growth", () =>
         this.getFriendsUnderHealthPercent(Settings.WildGrowthHealthPct).length >= Settings.WildGrowthMinTargets &&
-        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness"))
       ),
 
       // Lifebloom as regular heal (separate from maintenance)
@@ -717,7 +723,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Regular Regrowth
       spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
         this.getRegrowthTarget() !== null &&
-        (!me.isMoving() || me.hasVisibleAura("Nature's Swiftness"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness"))
       ),
 
       // Rejuvenation spread
@@ -740,7 +746,7 @@ export class JmrRestoDruidBehavior extends Behavior {
           }
 
           // Cancel cat form for emergency healing (unless form-locked)
-          if (me.hasVisibleAura(auras.catForm) && !me.hasVisibleAura(432031)) {
+          if (me.hasAuraByMe(auras.catForm) && !me.hasAuraByMe(432031)) {
             if (this.cancelCurrentForm()) {
               this.trackFormShift();
             }
@@ -764,8 +770,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Heart of the Wild (if not in stealth)
       spell.cast("Heart of the Wild", () =>
         Settings.UseHeartOfTheWild &&
-        !me.hasVisibleAura("Prowl") &&
-        !me.hasVisibleAura("Shadowmeld") &&
+        !me.hasAuraByMe("Prowl") &&
+        !me.hasAuraByMe("Shadowmeld") &&
         this.getEnemiesInRange(6) >= 1 &&
         this.shouldUseBurstAbility()
       ),
@@ -791,7 +797,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     return new bt.Selector(
       // HIGHEST PRIORITY: Spend 5 combo points on finishers before doing anything else
       new bt.Decorator(
-        () => me.hasVisibleAura(auras.catForm) && this.shouldSpendComboPointsBeforeExitingCat(),
+        () => me.hasAuraByMe(auras.catForm) && this.shouldSpendComboPointsBeforeExitingCat(),
         new bt.Action(() => {
           if (Settings.CatWeavingDebug) {
             console.info(`[RestoDruid] HIGH PRIORITY: Spending combo points before other abilities`);
@@ -802,12 +808,12 @@ export class JmrRestoDruidBehavior extends Behavior {
 
       // Exit cat form when energy is too low for cat abilities
       new bt.Action(() => {
-        if (me.hasVisibleAura(auras.catForm)) {
+        if (me.hasAuraByMe(auras.catForm)) {
           const currentEnergy = me.powerByType(PowerType.Energy);
           const energyThreshold = Settings.CatFormEnergyThreshold;
 
           // Exit if energy is below threshold (but respect minimum duration and form-lock)
-          if (currentEnergy < energyThreshold && this.canExitCatForm() && !me.hasVisibleAura(432031)) {
+          if (currentEnergy < energyThreshold && this.canExitCatForm() && !me.hasAuraByMe(432031)) {
             if (this.cancelCurrentForm()) {
               this.trackFormShift();
             }
@@ -817,7 +823,7 @@ export class JmrRestoDruidBehavior extends Behavior {
           // Also exit if we need to heal someone (but respect minimum duration unless emergency and not form-locked)
           const friendsNeedingHealing = this.getFriendsUnderHealthPercent(Settings.RegrowthHealthPct);
           const isEmergency = this.isEmergencyHealing();
-          if (friendsNeedingHealing.length > 0 && (isEmergency || this.canExitCatForm()) && !me.hasVisibleAura(432031)) {
+          if (friendsNeedingHealing.length > 0 && (isEmergency || this.canExitCatForm()) && !me.hasAuraByMe(432031)) {
             if (this.cancelCurrentForm()) {
               this.trackFormShift();
             }
@@ -832,14 +838,14 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Rake with stealth/prowl/sudden ambush (highest priority)
       spell.cast("Rake", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        (me.hasVisibleAura("Shadowmeld") || me.hasVisibleAura(auras.prowl) || me.hasVisibleAura("Sudden Ambush"))
+        (me.hasAuraByMe("Shadowmeld") || me.hasAuraByMe(auras.prowl) || me.hasAuraByMe("Sudden Ambush"))
       ),
 
       // Heart of the Wild in cat form (if Convoke CD < 40s or no Convoke talent)
       spell.cast("Heart of the Wild", () =>
         Settings.UseHeartOfTheWild &&
         spell.isSpellKnown("Heart of the Wild") &&
-        me.hasVisibleAura(auras.catForm) &&
+        me.hasAuraByMe(auras.catForm) &&
         (!spell.isSpellKnown("Convoke the Spirits") || spell.getCooldown("Convoke the Spirits").timeleft < 40000 || !Settings.UseConvokeForDPS) &&
         this.getEnemiesInRange(6) >= 1 &&
         this.shouldUseBurstAbility()
@@ -849,11 +855,11 @@ export class JmrRestoDruidBehavior extends Behavior {
        new bt.Decorator(
          () => Settings.UseConvokeForDPS &&
                this.getEnemiesInRange(40) <= 6 &&
-               !me.hasVisibleAura(auras.catForm) &&
-               !me.hasVisibleAura(432031) &&
+               !me.hasAuraByMe(auras.catForm) &&
+               !me.hasAuraByMe(432031) &&
                spell.isSpellKnown("Convoke the Spirits") &&
                spell.getCooldown("Convoke the Spirits").timeleft <= 1500 &&
-               (me.hasVisibleAura(auras.heartOfTheWild) ||
+               (me.hasAuraByMe(auras.heartOfTheWild) ||
                 !spell.isSpellKnown("Heart of the Wild") ||
                 spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
                 !Settings.UseHeartOfTheWild) &&
@@ -877,12 +883,12 @@ export class JmrRestoDruidBehavior extends Behavior {
         spell.cast("Cat Form", () =>
           Settings.UseConvokeForDPS &&
           this.getEnemiesInRange(40) <= 6 &&
-          !me.hasVisibleAura(auras.catForm) &&
+          !me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
           spell.isSpellKnown("Convoke the Spirits") &&
           spell.getCooldown("Convoke the Spirits").timeleft <= 1500 &&
-          (me.hasVisibleAura(auras.heartOfTheWild) ||
+          (me.hasAuraByMe(auras.heartOfTheWild) ||
            !spell.isSpellKnown("Heart of the Wild") ||
            spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
            !Settings.UseHeartOfTheWild) &&
@@ -899,8 +905,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Convoke the Spirits", () =>
         Settings.UseConvokeForDPS &&
         spell.isSpellKnown("Convoke the Spirits") &&
-        me.hasVisibleAura(auras.catForm) &&
-        (me.hasVisibleAura(auras.heartOfTheWild) ||
+        me.hasAuraByMe(auras.catForm) &&
+        (me.hasAuraByMe(auras.heartOfTheWild) ||
          !spell.isSpellKnown("Heart of the Wild") ||
          spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
          !Settings.UseHeartOfTheWild) &&
@@ -911,7 +917,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Rip finisher (simplified like Shaman Flame Shock)
       spell.cast("Rip", on => this.getRipTarget(), req =>
         this.getRipTarget() !== null &&
-        me.hasVisibleAura(auras.catForm) &&
+        me.hasAuraByMe(auras.catForm) &&
         me.powerByType(PowerType.ComboPoints) >= 5
       ),
 
@@ -919,11 +925,11 @@ export class JmrRestoDruidBehavior extends Behavior {
       new bt.Sequence(
         spell.cast("Thrash", on => this.getCurrentTarget(), req =>
           this.getCurrentTarget() !== null &&
-          me.hasVisibleAura(auras.catForm) &&
+          me.hasAuraByMe(auras.catForm) &&
           this.getEnemiesInRange(8) > 4 &&
           this.getTimeToDeath(this.getCurrentTarget()) > 5000 &&
           (!this.getCurrentTarget().getAuraByMe("Thrash") || this.getCurrentTarget().getAuraByMe("Thrash").remaining < 3000) &&
-          !me.hasVisibleAura(auras.prowl)
+          !me.hasAuraByMe(auras.prowl)
         ),
         new bt.Action(() => {
           this.trackComboGenerator("Thrash");
@@ -938,7 +944,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       new bt.Sequence(
         spell.cast("Rake", on => this.getRakeTarget(), req =>
           this.getRakeTarget() !== null &&
-          me.hasVisibleAura(auras.catForm)
+          me.hasAuraByMe(auras.catForm)
         ),
         new bt.Action(() => {
           this.trackComboGenerator("Rake");
@@ -951,8 +957,8 @@ export class JmrRestoDruidBehavior extends Behavior {
         () => {
           const hasFluidForm = this.hasTalent("Fluid Form");
           const shouldRake = this.shouldCastRakeNext();
-          const notInCat = !me.hasVisibleAura(auras.catForm);
-          const notFormLocked = !me.hasVisibleAura(432031);
+          const notInCat = !me.hasAuraByMe(auras.catForm);
+          const notFormLocked = !me.hasAuraByMe(432031);
           const hasEnergy = me.powerByType(PowerType.Energy) > 60;
           const rakeReady = spell.getCooldown(1822).ready;
           const hasAttackableTargets = this.getAttackableEnemiesInRange(8) > 0;
@@ -982,7 +988,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Cat Form if not in it and have energy (without Fluid Form or Rake target not in melee)
       new bt.Sequence(
         spell.cast("Cat Form", () =>
-          !me.hasVisibleAura(auras.catForm) &&
+          !me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
           this.getAttackableEnemiesInRange(8) > 0 &&
@@ -1006,21 +1012,21 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Starfire for AoE with Heart of the Wild
       spell.cast("Starfire", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        !me.hasVisibleAura(auras.catForm) &&
-        me.hasVisibleAura(auras.heartOfTheWild) &&
+        !me.hasAuraByMe(auras.catForm) &&
+        me.hasAuraByMe(auras.heartOfTheWild) &&
         this.getEnemiesInRange(40) > 7
       ),
 
       // Starsurge (single target or <8 enemies, not in cat form)
       spell.cast("Starsurge", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        (this.getEnemiesInRange(40) === 1 || (this.getEnemiesInRange(40) < 8 && !me.hasVisibleAura(auras.catForm)))
+        (this.getEnemiesInRange(40) === 1 || (this.getEnemiesInRange(40) < 8 && !me.hasAuraByMe(auras.catForm)))
       ),
 
       // Fluid Form optimization: Use Shred to enter Cat Form if Shred would be our next cast
       new bt.Decorator(
-        () => !me.hasVisibleAura(auras.catForm) &&
-              !me.hasVisibleAura(432031) &&
+        () => !me.hasAuraByMe(auras.catForm) &&
+              !me.hasAuraByMe(432031) &&
               me.powerByType(PowerType.Energy) > 50 &&
               this.hasTalent("Fluid Form") &&
               spell.getCooldown(5221).ready &&
@@ -1043,7 +1049,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Cat Form if not in it and have energy (without Fluid Form or Shred target not in melee)
       new bt.Sequence(
         spell.cast("Cat Form", () =>
-          !me.hasVisibleAura(auras.catForm) &&
+          !me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
           this.getAttackableEnemiesInRange(8) > 0 &&
@@ -1059,7 +1065,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Ferocious Bite finisher
       spell.cast("Ferocious Bite", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        me.hasVisibleAura(auras.catForm) &&
+        me.hasAuraByMe(auras.catForm) &&
         this.getEnemiesInRange(8) < 4 &&
         ((me.powerByType(PowerType.ComboPoints) > 3 && this.getTimeToDeath(this.getCurrentTarget()) < 3000) ||
          (me.powerByType(PowerType.ComboPoints) >= 5 && me.powerByType(PowerType.Energy) >= 50 &&
@@ -1070,11 +1076,11 @@ export class JmrRestoDruidBehavior extends Behavior {
       new bt.Sequence(
         spell.cast("Thrash", on => this.getCurrentTarget(), req =>
           this.getCurrentTarget() !== null &&
-          me.hasVisibleAura(auras.catForm) &&
+          me.hasAuraByMe(auras.catForm) &&
           this.getEnemiesInRange(8) > 2 &&
           this.getTimeToDeath(this.getCurrentTarget()) > 5000 &&
           (!this.getCurrentTarget().getAuraByMe("Thrash") || this.getCurrentTarget().getAuraByMe("Thrash").remaining < 3000) &&
-          !me.hasVisibleAura(auras.prowl)
+          !me.hasAuraByMe(auras.prowl)
         ),
         new bt.Action(() => {
           this.trackComboGenerator("Thrash");
@@ -1084,7 +1090,7 @@ export class JmrRestoDruidBehavior extends Behavior {
 
       // Rake for general DoT maintenance (simplified like Shaman Flame Shock)
       new bt.Decorator(
-        () => me.hasVisibleAura(auras.catForm) && spell.getCooldown(1822).ready,
+        () => me.hasAuraByMe(auras.catForm) && spell.getCooldown(1822).ready,
         new bt.Action(() => {
           const target = this.getRakeTarget();
           if (target) {
@@ -1103,26 +1109,26 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Swipe Cat for AoE combo points
       spell.cast("Swipe", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        me.hasVisibleAura(auras.catForm) &&
+        me.hasAuraByMe(auras.catForm) &&
         this.getEnemiesInRange(8) > 2 &&
         me.powerByType(PowerType.ComboPoints) < 5 &&
-        !me.hasVisibleAura(auras.prowl)
+        !me.hasAuraByMe(auras.prowl)
       ),
 
       // Thrash Cat maintenance
       spell.cast("Thrash", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        me.hasVisibleAura(auras.catForm) &&
+        me.hasAuraByMe(auras.catForm) &&
         this.getTimeToDeath(this.getCurrentTarget()) > 5000 &&
         (!this.getCurrentTarget().getAuraByMe("Thrash") || this.getCurrentTarget().getAuraByMe("Thrash").remaining < 3000) &&
-        !me.hasVisibleAura(auras.prowl)
+        !me.hasAuraByMe(auras.prowl)
       ),
 
       // Shred for combo points (simplified for debugging)
       new bt.Sequence(
         spell.cast("Shred", on => this.getCurrentTarget(), req =>
           this.getCurrentTarget() !== null &&
-          me.hasVisibleAura(auras.catForm) &&
+          me.hasAuraByMe(auras.catForm) &&
           me.distanceTo(this.getCurrentTarget()) <= 5 &&
           me.powerByType(PowerType.Energy) >= 40 &&
           me.powerByType(PowerType.ComboPoints) < 5
@@ -1135,8 +1141,8 @@ export class JmrRestoDruidBehavior extends Behavior {
 
       // Fluid Form optimization: Use Rake as fallback to enter Cat Form if Rake would be next
       new bt.Decorator(
-        () => !me.hasVisibleAura(auras.catForm) &&
-              !me.hasVisibleAura(432031) &&
+        () => !me.hasAuraByMe(auras.catForm) &&
+              !me.hasAuraByMe(432031) &&
               this.hasTalent("Fluid Form") &&
               spell.getCooldown(1822).ready &&
               this.getAttackableEnemiesInRange(8) > 0 &&
@@ -1159,7 +1165,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Cat Form fallback (without Fluid Form or Rake target not in melee)
       new bt.Sequence(
         spell.cast("Cat Form", () =>
-          !me.hasVisibleAura(auras.catForm) &&
+          !me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
           this.getAttackableEnemiesInRange(8) > 0 &&
@@ -1176,7 +1182,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       new bt.Sequence(
         spell.cast("Shred", on => this.getCurrentTarget(), req =>
           this.getCurrentTarget() !== null &&
-          me.hasVisibleAura(auras.catForm) &&
+          me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= 40
         ),
         new bt.Action(() => {
@@ -1201,8 +1207,8 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Starfire for AoE scenarios
       spell.cast("Starfire", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        !me.hasVisibleAura(auras.catForm) &&
-        ((this.getEnemiesInRange(40) > 1 && me.hasVisibleAura(auras.heartOfTheWild)) ||
+        !me.hasAuraByMe(auras.catForm) &&
+        ((this.getEnemiesInRange(40) > 1 && me.hasAuraByMe(auras.heartOfTheWild)) ||
          this.getEnemiesInRange(40) > 5)
       ),
 
@@ -1215,20 +1221,20 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Starsurge for single target or small groups
       spell.cast("Starsurge", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        !me.hasVisibleAura(auras.catForm) &&
+        !me.hasAuraByMe(auras.catForm) &&
         this.getEnemiesInRange(40) < 8
       ),
 
       // Starfire with Heart of the Wild or multi-target
       spell.cast("Starfire", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        !me.hasVisibleAura(auras.catForm) &&
-        (this.getEnemiesInRange(40) > 1 || me.hasVisibleAura(auras.heartOfTheWild))
+        !me.hasAuraByMe(auras.catForm) &&
+        (this.getEnemiesInRange(40) > 1 || me.hasAuraByMe(auras.heartOfTheWild))
       ),
 
       new bt.Sequence(
         spell.cast("Cat Form", () =>
-          !me.hasVisibleAura(auras.catForm) &&
+          !me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
           this.getAttackableEnemiesInRange(8) > 0 &&
@@ -1245,7 +1251,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       new bt.Sequence(
         spell.cast("Shred", on => this.getCurrentTarget(), req =>
           this.getCurrentTarget() !== null &&
-          me.hasVisibleAura(auras.catForm) &&
+          me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= 40
         ),
         new bt.Action(() => {
@@ -1257,7 +1263,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       // Wrath filler
       spell.cast("Wrath", on => this.getCurrentTarget(), req =>
         this.getCurrentTarget() !== null &&
-        !me.hasVisibleAura(auras.catForm) &&
+        !me.hasAuraByMe(auras.catForm) &&
         (this.hasTalent("Starfire") || this.getAttackableEnemiesInRange(8) === 0)
       )
     );
@@ -1536,7 +1542,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend &&
       !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
-      (friend.guid !== me.guid || (!me.hasVisibleAura(auras.barkskin))) &&
+      (friend.guid !== me.guid || (!me.hasAuraByMe(auras.barkskin))) &&
       friend.inCombat() &&
       friend.effectiveHealthPercent <= Settings.IronbarkHealthPct
     ) || null;
@@ -1613,8 +1619,8 @@ export class JmrRestoDruidBehavior extends Behavior {
   }
 
   hasEfflorescenceActive() {
-    // Check if we have the visible Efflorescence aura (simpler and more reliable)
-    return me.hasVisibleAura(auras.efflorescenceAura);
+    // In efflorescence from any source (full aura list; visible list misses some buffs)
+    return me.hasAura(auras.efflorescenceAura);
   }
 
   getActiveEfflorescence() {
@@ -2067,7 +2073,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       !enemy.deadOrGhost &&
       me.distanceTo(enemy) <= 5 &&
       this.getTimeToDeath(enemy) > 5000 &&  // Reduced from 15000 for better dummy support
-      !enemy.hasVisibleAuraByMe("Rip")
+      !enemy.hasAuraByMe("Rip")
     ) || null;
   }
 
@@ -2210,19 +2216,21 @@ export class JmrRestoDruidBehavior extends Behavior {
     return false;
   }
 
+  friendHasMotW(unit) {
+    return unit.hasAura(auras.markOfTheWild) || unit.hasAura("Mark of the Wild");
+  }
+
   getMarkOfTheWildTarget() {
-    // Check me first
-    if (!me.hasVisibleAura(auras.markOfTheWild)) {
+    if (!this.friendHasMotW(me)) {
       return me;
     }
 
-    // Check all friends within 40 yards
     return heal.friends.All.find(friend =>
       friend &&
       !friend.deadOrGhost &&
       friend.isPlayer() &&
       me.distanceTo(friend) <= 40 &&
-      !friend.hasVisibleAura(auras.markOfTheWild)
+      !this.friendHasMotW(friend)
     ) || null;
   }
 
@@ -2251,7 +2259,7 @@ export class JmrRestoDruidBehavior extends Behavior {
              friend.deadOrGhost !== undefined &&
              !friend.deadOrGhost &&
              me.distanceTo(friend) <= 40 &&
-             friend.hasVisibleAura !== undefined;
+             friend.hasAura !== undefined;
     } catch (error) {
       // If any property access fails, this friend is not safe
       return false;
@@ -2270,7 +2278,7 @@ export class JmrRestoDruidBehavior extends Behavior {
   }
 
   getSymbioticRelationshipTarget() {
-    if (me.hasVisibleAura(474754)) {
+    if (me.hasAuraByMe(474754)) {
       return;
     }
     // Prioritize tanks if they don't have it
@@ -2278,7 +2286,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       tank &&
       !tank.deadOrGhost &&
       me.distanceTo(tank) <= 40 &&
-      !tank.hasVisibleAuraByMe(auras.symbioticRelationship)
+      !tank.hasAuraByMe(auras.symbioticRelationship)
     );
     if (tank) return tank;
 
@@ -2287,7 +2295,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend &&
       !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
-      !friend.hasVisibleAuraByMe(auras.symbioticRelationship)
+      !friend.hasAuraByMe(auras.symbioticRelationship) && !friend.hasAuraByMe("Symbiotic Relationship")
     ) || null;
   }
 
@@ -2304,7 +2312,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend &&
       !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
-      friend.hasVisibleAura(440313)
+      friend.hasAura(440313)
     );
   }
 
@@ -2421,7 +2429,7 @@ export class JmrRestoDruidBehavior extends Behavior {
   canShiftForms() {
     // Check if enough time has passed since last form shift and we're not form-locked
     const timeSinceShift = Date.now() - this.lastFormShiftTime;
-    const notFormLocked = !me.hasVisibleAura(432031); // Form-locking aura
+    const notFormLocked = !me.hasAuraByMe(432031); // Form-locking aura
     return timeSinceShift >= Settings.FormShiftDelay && notFormLocked;
   }
 
@@ -2446,7 +2454,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     const timeSinceCatEntry = Date.now() - this.lastCatFormEntryTime;
     const canExit = timeSinceCatEntry >= Settings.MinCatFormDuration;
 
-    if (Settings.CatWeavingDebug && !canExit && me.hasVisibleAura(auras.catForm)) {
+    if (Settings.CatWeavingDebug && !canExit && me.hasAuraByMe(auras.catForm)) {
       const remaining = Settings.MinCatFormDuration - timeSinceCatEntry;
       console.info(`[RestoDruid] Cannot exit cat form yet - ${remaining}ms remaining of minimum duration`);
     }
@@ -2799,7 +2807,7 @@ export class JmrRestoDruidBehavior extends Behavior {
 
         // Cat Form status
         if (Settings.UseCatWeaving) {
-          const inCatForm = me.hasVisibleAura(auras.catForm);
+          const inCatForm = me.hasAuraByMe(auras.catForm);
           const catFormColor = inCatForm ? { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 0.6, g: 0.6, b: 0.6, a: 1.0 };
           const energyColor = me.powerByType(PowerType.Energy) >= Settings.CatFormEnergyThreshold ?
             { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 1.0, g: 0.6, b: 0.2, a: 1.0 };
@@ -2812,7 +2820,7 @@ export class JmrRestoDruidBehavior extends Behavior {
           const fluidFormColor = hasFluidForm ? { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 0.6, g: 0.6, b: 0.6, a: 1.0 };
           imgui.textColored(fluidFormColor, `Fluid Form: ${hasFluidForm ? "Yes" : "No"}`);
 
-          const hasProwl = me.hasVisibleAura(auras.prowl);
+          const hasProwl = me.hasAuraByMe(auras.prowl);
           const prowlColor = hasProwl ? { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 0.6, g: 0.6, b: 0.6, a: 1.0 };
           imgui.textColored(prowlColor, `Prowl: ${hasProwl ? "Active" : "Inactive"}`);
           imgui.text(`In Combat: ${me.inCombat() ? "Yes" : "No"}`);

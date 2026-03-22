@@ -114,7 +114,7 @@ export class DeathKnightBloodBehavior extends Behavior {
           ),
           spell.cast("Anti-Magic Shell",
             on => me,
-            req => this.shouldUseAntiMagicShell() && !me.hasVisibleAura("Anti-Magic Shell")
+            req => this.shouldUseAntiMagicShell() && !me.hasAuraByMe("Anti-Magic Shell")
           ),
           common.waitForFacing(),
           common.waitForTarget(),
@@ -143,22 +143,22 @@ export class DeathKnightBloodBehavior extends Behavior {
           ),
 
           // --- Defensives ---
-          spell.cast("Rune Tap", on => me, req => me.inCombat() && me.pctHealth < Settings.JmrRuneTapSetting && !me.hasVisibleAura("Rune Tap")),
+          spell.cast("Rune Tap", on => me, req => me.inCombat() && me.pctHealth < Settings.JmrRuneTapSetting && !me.hasAuraByMe("Rune Tap")),
           spell.cast("Death Strike", on => this.getCurrentTarget(), req => me.pctHealth < Settings.JmrDSPercent),
           spell.cast("Icebound Fortitude", on => me, req =>
-            (!me.hasVisibleAura(auras.dancing_rune_weapon) && !me.hasVisibleAura("Vampiric Blood") && me.pctHealth < Settings.JmrIBFSetting) || me.isStunned()
+            (!me.hasAuraByMe(auras.dancing_rune_weapon) && !me.hasAuraByMe("Vampiric Blood") && me.pctHealth < Settings.JmrIBFSetting) || me.isStunned()
           ),
           spell.cast("Lichborne", on => me, req => me.isFeared() || me.pctHealth < Settings.JmrLichborneSetting),
 
           // --- high_prio_actions ---
           spell.cast("Raise Dead", req => me.inCombat() && me.target),
           spell.cast("Death Strike", on => this.getCurrentTarget(), req => {
-            const coag = me.getAura("Coagulopathy");
+            const coag = me.getVisibleAura("Coagulopathy");
             return coag && coag.remaining > 0 && coag.remaining <= 1500;
           }),
 
           // Vampiric Blood - max uptime
-          spell.cast("Vampiric Blood", on => me, req => !me.hasVisibleAura("Vampiric Blood")),
+          spell.cast("Vampiric Blood", on => me, req => !me.hasAuraByMe("Vampiric Blood")),
 
           // Dancing Rune Weapon
           spell.cast("Dancing Rune Weapon", req => this.shouldUseDRW()),
@@ -174,7 +174,7 @@ export class DeathKnightBloodBehavior extends Behavior {
             new bt.Selector(
               // San'layn during DRW (Gift of the San'layn window)
               new bt.Decorator(
-                () => this.isSanlayn() && me.hasVisibleAura(auras.dancing_rune_weapon),
+                () => this.isSanlayn() && me.hasAuraByMe(auras.dancing_rune_weapon),
                 this.sanGift()
               ),
               // San'layn default (also fallback when sanGift can't cast anything)
@@ -202,16 +202,16 @@ export class DeathKnightBloodBehavior extends Behavior {
       spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() < 50),
       // Bone Shield maintenance (at least 5 stacks)
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return !bs || bs.stacks < 5 || bs.remaining < 3000;
       }),
       // Blood Boil if DRW Blood Plague copy not ticking on target
       spell.cast("Blood Boil", on => me, req => {
         const target = this.getCurrentTarget();
-        return target && !target.hasVisibleAuraByMe(auras.blood_plague);
+        return target && !target.hasAuraByMe(auras.blood_plague);
       }),
       // Death and Decay on Crimson Scourge proc
-      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => me.hasVisibleAura("Crimson Scourge")),
+      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => me.hasAuraByMe("Crimson Scourge")),
       // Fill with Vampiric Strike
       spell.cast("Vampiric Strike", on => this.getCurrentTarget()),
       // Heart Strike fallback
@@ -228,20 +228,20 @@ export class DeathKnightBloodBehavior extends Behavior {
       spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() < 50),
       // Bone Shield emergency (about to expire, rune-efficient)
       spell.cast("Death's Caress", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return (!bs || bs.remaining < 3000 || bs.stacks <= 1) && me.powerByType(PowerType.Runes) < 4;
       }),
       // Bone Shield maintenance (at least 5 stacks, or about to expire)
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return !bs || bs.stacks < 5 || bs.remaining < 3000;
       }),
       // Death and Decay uptime or Crimson Scourge proc
       spell.cast("Death and Decay", on => this.getCurrentTarget(), req =>
-        !me.hasVisibleAura("Death and Decay") || me.hasVisibleAura("Crimson Scourge")
+        !me.hasAuraByMe("Death and Decay") || me.hasAuraByMe("Crimson Scourge")
       ),
       // Blood Boil with Boiling Point proc
-      spell.cast("Blood Boil", on => me, req => me.hasVisibleAura("Boiling Point")),
+      spell.cast("Blood Boil", on => me, req => me.hasAuraByMe("Boiling Point")),
       // Vampiric Strike when proc available
       spell.cast("Vampiric Strike", on => this.getCurrentTarget(), req => me.hasAura(auras.vampiric_strike_proc)),
       // Blood Boil to prevent charge capping
@@ -256,22 +256,22 @@ export class DeathKnightBloodBehavior extends Behavior {
     return new bt.Selector(
       // Death Strike at near-cap RP (lower threshold during DRW)
       spell.cast("Death Strike", on => this.getCurrentTarget(), req =>
-        this.runicPowerDeficit() < 20 || (this.runicPowerDeficit() < 26 && me.hasVisibleAura(auras.dancing_rune_weapon))
+        this.runicPowerDeficit() < 20 || (this.runicPowerDeficit() < 26 && me.hasAuraByMe(auras.dancing_rune_weapon))
       ),
       // Death and Decay uptime
-      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => !me.hasVisibleAura("Death and Decay")),
+      spell.cast("Death and Decay", on => this.getCurrentTarget(), req => !me.hasAuraByMe("Death and Decay")),
       // Reaper's Mark
       spell.cast("Reaper's Mark", on => this.getCurrentTarget()),
       // Marrowrend with Exterminate proc
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => me.hasAura(auras.exterminate)),
       // Death's Caress for Bone Shield (rune-efficient when low on runes)
       spell.cast("Death's Caress", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return (!bs || bs.remaining < 3000 || bs.stacks < 6) && me.powerByType(PowerType.Runes) < 4;
       }),
       // Marrowrend for Bone Shield maintenance
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return !bs || bs.remaining < 3000 || bs.stacks < 6;
       }),
       // Death Strike dump
@@ -279,7 +279,7 @@ export class DeathKnightBloodBehavior extends Behavior {
       // Blood Boil
       spell.cast("Blood Boil", on => me),
       // Consumption (basic cast, not during DRW)
-      spell.cast("Consumption", on => this.getCurrentTarget(), req => !me.hasVisibleAura(auras.dancing_rune_weapon)),
+      spell.cast("Consumption", on => this.getCurrentTarget(), req => !me.hasAuraByMe(auras.dancing_rune_weapon)),
       // Heart Strike filler
       spell.cast("Heart Strike", on => this.getCurrentTarget()),
       // Consumption (lowest priority fallback)
@@ -292,7 +292,7 @@ export class DeathKnightBloodBehavior extends Behavior {
   shouldUseDRW() {
     const target = this.getCurrentTarget();
     if (!target) return false;
-    if (me.hasVisibleAura(auras.dancing_rune_weapon)) return false;
+    if (me.hasAuraByMe(auras.dancing_rune_weapon)) return false;
     if (target.timeToDeath() < Settings.JmrDRWTTD) return false;
     if (!this.isSanlayn()) {
       if (me.hasAura(auras.exterminate)) return false;
@@ -315,7 +315,7 @@ export class DeathKnightBloodBehavior extends Behavior {
   }
 
   UnitsAroundMissingBloodPlague() {
-    return me.getUnitsAround(10).filter(unit => !unit.hasVisibleAuraByMe(auras.blood_plague)).length > 0;
+    return me.getUnitsAround(10).filter(unit => !unit.hasAuraByMe(auras.blood_plague)).length > 0;
   }
 
   getCurrentTarget() {

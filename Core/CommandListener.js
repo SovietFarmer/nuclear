@@ -60,6 +60,10 @@ class CommandListener {
 
   tick() {
     if (!me) return;
+    if (!Settings.SpellQueueSystemEnabled) return;
+    // Failed-cast pause is independent of the queue; still block keybind queue while paused.
+    const failPauseUntil = globalThis.__nuclearFailPauseUntil || 0;
+    if (Settings.PauseRotationOnFailedCasts && failPauseUntil > wow.frameTime) return;
     if (this.isBindingSlot !== null) return;
 
     const slots = this.getSlots();
@@ -84,6 +88,7 @@ class CommandListener {
   }
 
   handleFailedCast(eventData) {
+    if (!Settings.SpellQueueSystemEnabled) return;
     if (!me) return;
     if (me.isMounted) return;
     if (!eventData.source || !eventData.source.guid.equals(me.guid)) return;
@@ -109,6 +114,7 @@ class CommandListener {
     if (knownSpell.cooldown && knownSpell.cooldown.timeleft > 1500) return;
 
     const target = this.resolveTarget(eventData.destination, spellName, knownSpell);
+    if (!target) return;
 
     const targetUnit = this.targetFunctions[target]?.();
     if (!targetUnit) return;
@@ -139,7 +145,7 @@ class CommandListener {
       return "me";
     }
 
-    // 4. Default — most player-initiated failed casts are offensive
+    // 4. Default: most player-initiated failed casts are intended for your target.
     return "target";
   }
 
@@ -168,7 +174,11 @@ class CommandListener {
       return;
     }
 
-    this.addSpellToQueue({ target, spellName, spellId: spell.id });
+    this.addSpellToQueue({
+      target,
+      spellName,
+      spellId: spell.id,
+    });
     this.processQueuedSpell();
   }
 
@@ -182,9 +192,10 @@ class CommandListener {
   }
 
   getNextQueuedSpell() {
+    if (!Settings.SpellQueueSystemEnabled) return null;
     const currentTime = wow.frameTime;
     const defaultExpiry = Settings.SpellQueueExpirationTimer || 5000;
-    const failedCastExpiry = 3000;
+    const failedCastExpiry = 1800;
 
     this.spellQueue = this.spellQueue.filter(spell => {
       const expiry = spell.fromFailedCast ? failedCastExpiry : defaultExpiry;
@@ -196,15 +207,15 @@ class CommandListener {
 
   processQueuedSpell() {
     const spellInfo = this.getNextQueuedSpell();
-    if (spellInfo) {
-      const targetFunction = this.targetFunctions[spellInfo.target];
-      if (!targetFunction) {
-        console.error(`Invalid target type: ${spellInfo.target}`);
-        return;
-      }
+    if (!spellInfo) return;
 
-      Spell.cast(spellInfo.spellName, targetFunction).tick({});
+    const targetFunction = this.targetFunctions[spellInfo.target];
+    if (!targetFunction) {
+      console.error(`Invalid target type: ${spellInfo.target}`);
+      return;
     }
+
+    Spell.cast(spellInfo.spellName, targetFunction).tick({});
   }
 
   removeSpellFromQueue(spellName) {
@@ -219,7 +230,14 @@ class CommandListener {
     this.spellQueue.length = 0;
   }
 
+  dropFailedCastQueue() {
+    if (!this.spellQueue.some(s => s.fromFailedCast)) return;
+    this.spellQueue = this.spellQueue.filter(s => !s.fromFailedCast);
+    console.info(`[SpellQueue] Dropped failed-cast items`);
+  }
+
   renderQueuedSpells() {
+    if (!Settings.SpellQueueSystemEnabled) return;
     if (this.spellQueue.length === 0) return;
 
     const drawList = imgui.getBackgroundDrawList();
@@ -300,7 +318,36 @@ class FailedCastListener extends wow.EventListener {
     if (event.name !== "COMBAT_LOG_EVENT_UNFILTERED") return;
     const [eventData] = event.args;
 
-    if (eventData.eventType === 7 && Settings.AutoQueueFailedCasts) {
+    if (eventData.eventType !== 7 || !eventData.source?.guid?.equals(me?.guid)) return;
+
+    const queueEnabled = Settings.SpellQueueSystemEnabled;
+    const pauseOnFail = Settings.PauseRotationOnFailedCasts;
+    const autoQueueAllowed = Settings.AutoQueueFailedCasts && queueEnabled;
+
+    // CLEU handler runs when either feature needs it (independent of spell-queue master flag).
+    if (!pauseOnFail && !autoQueueAllowed) return;
+
+    if (pauseOnFail) {
+      const pauseMs = Settings.FailedCastPauseMs ?? 50;
+      const spellId = eventData.args?.[0];
+      let spellLabel = `${spellId ?? "unknown"}`;
+      if (spellId) {
+        try {
+          const spell = new wow.Spell(spellId);
+          spellLabel = spell?.name || `${spellId}`;
+        } catch {}
+      }
+      // When we're in "pause on fail" mode, queued failed casts are more
+      // harmful than helpful (can cause wrong-target retries).
+      commandListener.dropFailedCastQueue();
+      globalThis.__nuclearFailPauseUntil = wow.frameTime + pauseMs;
+      if (Settings.FailedCastPauseDebugLogs) {
+        console.info(`Spell cast ${spellLabel} failed, pausing for ${pauseMs}ms`);
+      }
+      return;
+    }
+
+    if (autoQueueAllowed) {
       commandListener.handleFailedCast(eventData);
     }
   }

@@ -38,7 +38,7 @@ export class DeathKnightUnholy extends Behavior {
       common.waitForCastOrChannel(),
       common.waitForTarget(),
       new bt.Decorator(
-        ret => me.pet && me.pet.hasVisibleAura(auras.darkTransformation),
+        ret => me.pet && me.pet.hasAuraByMe(auras.darkTransformation),
         spell.interrupt("Leap", true)
       ),
       spell.interrupt("Gnaw", true),
@@ -47,7 +47,7 @@ export class DeathKnightUnholy extends Behavior {
       spell.interrupt("Mind Freeze", true),
       spell.cast("Claw", on => me.target),
       spell.cast("Huddle", ret => Pet.current &&
-        Pet.current.hasVisibleAura(auras.darkTransformation) &&
+        Pet.current.hasAuraByMe(auras.darkTransformation) &&
         Spell.getTimeSinceLastCast("Dark Transformation") < 5000),
       spell.cast("Strangulate", on => this.strangulateTarget(), ret => me.target && me.target.pctHealth < 70 && this.strangulateTarget() !== undefined),
       spell.cast("Blinding Sleet", on => this.blindingSleetTarget(), ret => this.blindingSleetTarget() !== undefined),

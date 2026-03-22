@@ -129,7 +129,7 @@ export class NuclearDruidRestorationBehavior extends NuclearDruid {
         spell.dispel("Nature's Cure", true, DispelPriority.Low, true, WoWDispelType.Magic, WoWDispelType.Curse, WoWDispelType.Poison),
         spell.cast("Mark of the Wild", req => this.findMotwTarget()),
         spell.cast("Swiftmend", req => this.findSwiftmendTarget()),
-        spell.cast("Regrowth", req => me.hasVisibleAura("Clearcasting") && heal.getPriorityTarget()?.predictedHealthPercent < 90, on => heal.getPriorityTarget()),
+        spell.cast("Regrowth", req => me.hasAuraByMe("Clearcasting") && heal.getPriorityTarget()?.predictedHealthPercent < 90, on => heal.getPriorityTarget()),
         spell.cast("Wild Growth", req => this.wantWildGrowth()),
         spell.cast("Lifebloom", req => this.findLifebloomTarget()),
         spell.cast("Cenarion Ward", req => this.findCenarionWardTarget()),

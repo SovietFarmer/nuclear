@@ -1,4 +1,5 @@
 import CommandListener from "@/Core/CommandListener";
+import Settings from "@/Core/Settings";
 import colors from "@/Enums/Colors";
 
 const TARGET_TYPES = ["target", "focus", "me"];
@@ -6,7 +7,14 @@ const TARGET_TYPES = ["target", "focus", "me"];
 const SpellQueueDisplay = {
   tabName: "Spell Queue",
 
-  options: [],
+  options: [
+    { type: "checkbox", uid: "SpellQueueSystemEnabled", text: "Enable spell queue (keybinds + on-screen queue)", default: true },
+    { type: "slider", uid: "SpellQueueExpirationTimer", text: "Spell queue expiration (ms)", min: 2000, max: 5000, default: 3000 },
+    { type: "slider", uid: "SpellCastDelay", text: "Spell cast delay (ms)", min: 0, max: 1000, default: 0 },
+    { type: "checkbox", uid: "SpellDebugCompare", text: "Log default rotation comparison", default: false },
+    { type: "slider", uid: "FailedCastPauseMs", text: "Failed cast pause duration (ms)", min: 0, max: 5000, default: 50 },
+    { type: "checkbox", uid: "FailedCastPauseDebugLogs", text: "Failed cast pause debug logs", default: false }
+  ],
 
   _slotInputs: {},
 
@@ -27,6 +35,20 @@ const SpellQueueDisplay = {
   },
 
   renderOptions: function(renderOptionsGroup) {
+    renderOptionsGroup([
+      { header: "Spell queue", options: this.options.slice(0, 4) },
+      { header: "When \"pause on failed casts\" is on (General tab)", options: this.options.slice(4, 6) }
+    ]);
+
+    imgui.spacing();
+
+    if (!Settings.SpellQueueSystemEnabled) {
+      imgui.textWrapped(
+        "Spell queue is disabled above. Turn it on to use keybind slots, the overlay, and queued casts."
+      );
+      imgui.spacing();
+    }
+
     if (imgui.collapsingHeader("Active Queue", imgui.TreeNodeFlags.DefaultOpen)) {
       const queuedSpells = CommandListener.spellQueue;
 

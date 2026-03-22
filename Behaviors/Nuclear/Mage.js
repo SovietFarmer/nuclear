@@ -65,14 +65,14 @@ export class NuclearFrostMageBehavior extends Behavior {
 
           //actions += /run_action_list,name=aoe,if=active_enemies>=7|active_enemies>=3&talent.ice_caller
           new bt.Decorator(
-            req => this.enemiesAroundTarget(20) >= 7 || this.enemiesAroundTarget(20) >= 3 && me.hasAura("Ice Caller"),
+            req => this.enemiesAroundTarget(20) >= 7 || this.enemiesAroundTarget(20) >= 3 && me.hasVisibleAura("Ice Caller"),
             this.aoe(),
             new AlwaysSucceed(),
           ),
 
           //actions += /run_action_list,name=ss_cleave,if=active_enemies>=2&active_enemies<=3&talent.splinterstorm
           new bt.Decorator(
-            req => this.enemiesAroundTarget(20) >= 2 && this.enemiesAroundTarget(20) <= 3 && me.hasAura("Splinterstorm"),
+            req => this.enemiesAroundTarget(20) >= 2 && this.enemiesAroundTarget(20) <= 3 && me.hasVisibleAura("Splinterstorm"),
             this.ss_cleave(),
             new AlwaysSucceed(),
           ),
@@ -86,7 +86,7 @@ export class NuclearFrostMageBehavior extends Behavior {
 
           //actions += /run_action_list,name=ss_st,if=talent.splinterstorm
           new bt.Decorator(
-            req => me.hasAura("Splinterstorm"),
+            req => me.hasVisibleAura("Splinterstorm"),
             this.ss_st(),
             new AlwaysSucceed(),
           ),
@@ -121,15 +121,15 @@ export class NuclearFrostMageBehavior extends Behavior {
   aoe() {
     return new bt.Selector(
       //actions.aoe = cone_of_cold,if= talent.coldest_snap & (prev_gcd.1.comet_storm | prev_gcd.1.frozen_orb & !talent.comet_storm)
-      spell.cast("Cone of Cold", this.getCurrentTarget, req => this.enemiesForConeOfCold() && me.hasAura("Coldest Snap") && !me.hasAura("Comet Storm")),
+      spell.cast("Cone of Cold", this.getCurrentTarget, req => this.enemiesForConeOfCold() && me.hasVisibleAura("Coldest Snap") && !me.hasVisibleAura("Comet Storm")),
       //actions.aoe += /frozen_orb,if=(!prev_gcd.1.cone_of_cold|!talent.isothermic_core)&(!prev_gcd.1.glacial_spike|!freezable)
       spell.cast("Frozen Orb", this.getCurrentTarget, req => this.facingForFrozenOrb()),
       //actions.aoe += /blizzard,if=!prev_gcd.1.glacial_spike|!freezable
       spell.cast("Blizzard", this.getCurrentTarget),
       //actions.aoe += /frostbolt,if=buff.icy_veins.up&(buff.deaths_chill.stack<9|buff.deaths_chill.stack=9&!action.frostbolt.in_flight)&buff.icy_veins.remains>8&talent.deaths_chill
-      spell.cast("Frostbolt", this.getCurrentTarget, req => me.hasVisibleAura("Icy Veins") && me.getAuraStacks("Death's Chill") < 9 && me.getAura("Icy Veins")?.remaining > 8000 && me.hasAura("Death's Chill")),
+      spell.cast("Frostbolt", this.getCurrentTarget, req => me.hasAuraByMe("Icy Veins") && me.getAuraStacks("Death's Chill") < 9 && me.getVisibleAura("Icy Veins")?.remaining > 8000 && me.hasVisibleAura("Death's Chill")),
       //actions.aoe += /comet_storm,if=!prev_gcd.1.glacial_spike&(!talent.coldest_snap|cooldown.cone_of_cold.ready&cooldown.frozen_orb.remains>25|(cooldown.cone_of_cold.remains>10&talent.frostfire_bolt|cooldown.cone_of_cold.remains>20&!talent.frostfire_bolt))
-      spell.cast("Comet Storm", this.getCurrentTarget, req => (!me.hasAura("Coldest Snap") || spell.getCooldown("Cone of Cold").ready && spell.getCooldown("Frozen Orb").timeleft > 25000 || (spell.getCooldown("Cone of Cold").timeleft > 10000 && me.hasAura("Frostfire Bolt") || spell.getCooldown("Cone of Cold").timeleft > 20000 && !me.hasAura("Frostfire Bolt")))),
+      spell.cast("Comet Storm", this.getCurrentTarget, req => (!me.hasVisibleAura("Coldest Snap") || spell.getCooldown("Cone of Cold").ready && spell.getCooldown("Frozen Orb").timeleft > 25000 || (spell.getCooldown("Cone of Cold").timeleft > 10000 && me.hasVisibleAura("Frostfire Bolt") || spell.getCooldown("Cone of Cold").timeleft > 20000 && !me.hasVisibleAura("Frostfire Bolt")))),
       //actions.aoe += /freeze,if=freezable&debuff.frozen.down&(!talent.glacial_spike|prev_gcd.1.glacial_spike)
       //spell.cast("Freeze", this.getCurrentTarget/** req => debuff.frozen.down*/),
       //actions.aoe += /ice_nova,if=freezable&!prev_off_gcd.freeze&(prev_gcd.1.glacial_spike)
@@ -139,17 +139,17 @@ export class NuclearFrostMageBehavior extends Behavior {
       //actions.aoe += /shifting_power,if=cooldown.comet_storm.remains>10
       spell.cast("Shifting Power", on => me, req => spell.getCooldown("Comet Storm").timeleft > 10000),
       //actions.aoe += /frostbolt,if=buff.frostfire_empowerment.react&!buff.excess_frost.react&!buff.excess_fire.react
-      spell.cast("Frostbolt", this.getCurrentTarget, req => me.hasVisibleAura("Frostfire Empowerment") && !me.hasVisibleAura("Excess Frost") && !me.hasVisibleAura("Excess Fire")),
+      spell.cast("Frostbolt", this.getCurrentTarget, req => me.hasAuraByMe("Frostfire Empowerment") && !me.hasAuraByMe("Excess Frost") && !me.hasAuraByMe("Excess Fire")),
       //actions.aoe += /flurry,if=cooldown_react&!remaining_winters_chill&(buff.brain_freeze.react&!talent.excess_frost|buff.excess_frost.react)
-      spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && (me.hasVisibleAura("Brain Freeze") && !me.hasAura("Excess Frost") || me.hasVisibleAura("Excess Frost"))),
+      spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && (me.hasAuraByMe("Brain Freeze") && !me.hasVisibleAura("Excess Frost") || me.hasAuraByMe("Excess Frost"))),
       //actions.aoe += /ice_lance,if=buff.fingers_of_frost.react|debuff.frozen.remains>travel_time|remaining_winters_chill
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Fingers of Frost") /** || debuff.frozen.remains */ || this.remainingWintersChill() > 0),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAuraByMe("Fingers of Frost") /** || debuff.frozen.remains */ || this.remainingWintersChill() > 0),
       //actions.aoe += /flurry,if=cooldown_react&!remaining_winters_chill
       spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() === 0),
       //actions.aoe += /ice_nova,if=active_enemies>=4&(!talent.glacial_spike|!freezable)&!talent.frostfire_bolt
-      spell.cast("Ice Nova", this.getCurrentTarget, req => this.enemiesAroundMe(20) >= 4 && (!me.hasAura("Glacial Spike")) && !me.hasAura("Frostfire Bolt")),
+      spell.cast("Ice Nova", this.getCurrentTarget, req => this.enemiesAroundMe(20) >= 4 && (!me.hasVisibleAura("Glacial Spike")) && !me.hasVisibleAura("Frostfire Bolt")),
       //actions.aoe += /cone_of_cold,if=!talent.coldest_snap&active_enemies>=7
-      spell.cast("Cone of Cold", this.getCurrentTarget, req => !me.hasAura("Coldest Snap") && this.enemiesInFrontOfMe() >= 7),
+      spell.cast("Cone of Cold", this.getCurrentTarget, req => !me.hasVisibleAura("Coldest Snap") && this.enemiesInFrontOfMe() >= 7),
       //actions.aoe += /frostbolt
       spell.cast("Frostbolt", this.getCurrentTarget),
       //actions.aoe += /call_action_list,name=movement
@@ -164,21 +164,21 @@ export class NuclearFrostMageBehavior extends Behavior {
       //actions.cleave += /flurry,target_if=min:debuff.winters_chill.stack,if=cooldown_react&(((prev_gcd.1.frostbolt|prev_gcd.1.frostfire_bolt)&buff.icicles.react>=3)|prev_gcd.1.glacial_spike|(buff.icicles.react>=3&buff.icicles.react<5&charges_fractional=2))
       spell.cast("Flurry", this.getCurrentTarget, req => me.getAuraStacks("Icicles") >= 3 && me.getAuraStacks("Icicles") < 5),
       //actions.cleave += /ice_lance,target_if=max:debuff.winters_chill.stack,if=talent.glacial_spike&debuff.winters_chill.down&buff.icicles.react=4&buff.fingers_of_frost.react
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAura("Glacial Spike") && this.remainingWintersChill() === 0 && me.getAuraStacks("Icicles") === 4 && me.hasVisibleAura("Fingers of Frost")),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Glacial Spike") && this.remainingWintersChill() === 0 && me.getAuraStacks("Icicles") === 4 && me.hasAuraByMe("Fingers of Frost")),
       //actions.cleave += /ray_of_frost,target_if=max:debuff.winters_chill.stack,if=remaining_winters_chill=1
       spell.cast("Ray of Frost", this.getCurrentTarget, req => this.remainingWintersChill() === 1),
       //actions.cleave += /glacial_spike,if=buff.icicles.react=5&(action.flurry.cooldown_react|remaining_winters_chill)
       spell.cast("Glacial Spike", this.getCurrentTarget, req => me.getAuraStacks("Icicles") === 5 && this.remainingWintersChill() > 0),
       //actions.cleave += /frozen_orb,if=buff.fingers_of_frost.react<2&(!talent.ray_of_frost|cooldown.ray_of_frost.remains)
-      spell.cast("Frozen Orb", this.getCurrentTarget, req => me.hasVisibleAura("Fingers of Frost") && me.getAuraByMe("Fingers of Frost").remaining < 2000 && (!me.hasAura("Ray of Frost") || spell.getCooldown("Ray of Frost").timeleft > 0)),
+      spell.cast("Frozen Orb", this.getCurrentTarget, req => me.hasAuraByMe("Fingers of Frost") && me.getAuraByMe("Fingers of Frost").remaining < 2000 && (!me.hasVisibleAura("Ray of Frost") || spell.getCooldown("Ray of Frost").timeleft > 0)),
       //actions.cleave += /cone_of_cold,if=talent.coldest_snap&cooldown.comet_storm.remains>10&cooldown.frozen_orb.remains>10&remaining_winters_chill=0&active_enemies>=3
-      spell.cast("Cone of Cold", this.getCurrentTarget, req => this.enemiesForConeOfCold() && me.hasAura("Coldest Snap") && spell.getCooldown("Comet Storm").timeleft > 10000 && spell.getCooldown("Frozen Orb").timeleft > 10000 && this.remainingWintersChill() === 0),
+      spell.cast("Cone of Cold", this.getCurrentTarget, req => this.enemiesForConeOfCold() && me.hasVisibleAura("Coldest Snap") && spell.getCooldown("Comet Storm").timeleft > 10000 && spell.getCooldown("Frozen Orb").timeleft > 10000 && this.remainingWintersChill() === 0),
       //actions.cleave += /shifting_power,if=cooldown.frozen_orb.remains>10&(!talent.comet_storm|cooldown.comet_storm.remains>10)&(!talent.ray_of_frost|cooldown.ray_of_frost.remains>10)|cooldown.icy_veins.remains<20
-      spell.cast("Shifting Power", on => me, req => spell.getCooldown("Frozen Orb").timeleft > 10000 && (!me.hasAura("Comet Storm") || spell.getCooldown("Comet Storm").timeleft > 10000) && (!me.hasAura("Ray of Frost") || spell.getCooldown("Ray of Frost").timeleft > 10000) || spell.getCooldown("Icy Veins").timeleft < 20000),
+      spell.cast("Shifting Power", on => me, req => spell.getCooldown("Frozen Orb").timeleft > 10000 && (!me.hasVisibleAura("Comet Storm") || spell.getCooldown("Comet Storm").timeleft > 10000) && (!me.hasVisibleAura("Ray of Frost") || spell.getCooldown("Ray of Frost").timeleft > 10000) || spell.getCooldown("Icy Veins").timeleft < 20000),
       //actions.cleave += /glacial_spike,if=buff.icicles.react=5
       spell.cast("Glacial Spike", this.getCurrentTarget, req => me.getAuraStacks("Icicles") === 5),
       //actions.cleave += /ice_lance,target_if=max:debuff.winters_chill.stack,if=buff.fingers_of_frost.react&!prev_gcd.1.glacial_spike|remaining_winters_chill
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Fingers of Frost") && this.remainingWintersChill() > 0),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAuraByMe("Fingers of Frost") && this.remainingWintersChill() > 0),
       //actions.cleave += /ice_nova,if=active_enemies>=4
       spell.cast("Ice Nova", this.getCurrentTarget),
       //actions.cleave += /frostbolt
@@ -193,21 +193,21 @@ export class NuclearFrostMageBehavior extends Behavior {
       //actions.ss_cleave = flurry, target_if = min: debuff.winters_chill.stack,if= cooldown_react & remaining_winters_chill= 0 & debuff.winters_chill.down & (prev_gcd.1.frostbolt | prev_gcd.1.glacial_spike)
       spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() === 0),
       //actions.ss_cleave += /ice_lance,target_if=max:debuff.winters_chill.stack,if=buff.icy_veins.up&debuff.winters_chill.stack=2
-      spell.cast("Ice Lance", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && me.hasVisibleAura("Icy Veins")),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && me.hasAuraByMe("Icy Veins")),
       //actions.ss_cleave += /ray_of_frost,if=buff.icy_veins.down&buff.freezing_winds.down&remaining_winters_chill=1
-      spell.cast("Ray of Frost", this.getCurrentTarget, req => !me.hasVisibleAura("Icy Veins") && this.remainingWintersChill() === 1),
+      spell.cast("Ray of Frost", this.getCurrentTarget, req => !me.hasAuraByMe("Icy Veins") && this.remainingWintersChill() === 1),
       //actions.ss_cleave += /frozen_orb
       spell.cast("Frozen Orb", this.getCurrentTarget, req => this.facingForFrozenOrb()),
       //actions.ss_cleave += /shifting_power
       spell.cast("Shifting Power", on => me),
       //actions.ss_cleave += /ice_lance,target_if=max:debuff.winters_chill.stack,if=remaining_winters_chill|buff.fingers_of_frost.react
-      spell.cast("Ice Lance", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && me.hasVisibleAura("Fingers of Frost")),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && me.hasAuraByMe("Fingers of Frost")),
       //actions.ss_cleave += /comet_storm,if=prev_gcd.1.flurry|prev_gcd.1.cone_of_cold|action.splinterstorm.in_flight
       spell.cast("Comet Storm", this.getCurrentTarget),
       //actions.ss_cleave += /glacial_spike,if=buff.icicles.react=5
       spell.cast("Glacial Spike", this.getCurrentTarget, req => me.getAuraStacks("Icicles") === 5),
       //actions.ss_cleave += /flurry,target_if=min:debuff.winters_chill.stack,if=cooldown_react&buff.icy_veins.up
-      spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && me.hasVisibleAura("Icy Veins")),
+      spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() > 0 && me.hasAuraByMe("Icy Veins")),
       //actions.ss_cleave += /frostbolt
       spell.cast("Frostbolt", this.getCurrentTarget),
       //actions.aoe += /call_action_list,name=movement
@@ -220,9 +220,9 @@ export class NuclearFrostMageBehavior extends Behavior {
       //actions.ss_st = flurry,if= cooldown_react & remaining_winters_chill= 0 & debuff.winters_chill.down & (prev_gcd.1.frostbolt | prev_gcd.1.glacial_spike)
       spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() === 0),
       //actions.ss_st += /ice_lance,if=buff.icy_veins.up&(debuff.winters_chill.stack=2|debuff.winters_chill.stack=1&action.splinterstorm.in_flight)
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Icy Veins") && this.remainingWintersChill() >= 1),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAuraByMe("Icy Veins") && this.remainingWintersChill() >= 1),
       //actions.ss_st += /ray_of_frost,if=buff.icy_veins.down&buff.freezing_winds.down&remaining_winters_chill=1
-      spell.cast("Ray of Frost", this.getCurrentTarget, req => !me.hasVisibleAura("Icy Veins") && !me.hasVisibleAura("Freezing Winds") && this.remainingWintersChill() === 1),
+      spell.cast("Ray of Frost", this.getCurrentTarget, req => !me.hasAuraByMe("Icy Veins") && !me.hasAuraByMe("Freezing Winds") && this.remainingWintersChill() === 1),
       //actions.ss_st += /frozen_orb
       spell.cast("Frozen Orb", this.getCurrentTarget, req => this.facingForFrozenOrb()),
       //actions.ss_st += /shifting_power
@@ -234,9 +234,9 @@ export class NuclearFrostMageBehavior extends Behavior {
       //actions.ss_st += /glacial_spike,if=buff.icicles.react=5
       spell.cast("Glacial Spike", this.getCurrentTarget, req => me.getAuraStacks("Icicles") === 5),
       //actions.ss_st += /flurry,if=cooldown_react&buff.icy_veins.up&!action.splinterstorm.in_flight
-      spell.cast("Flurry", this.getCurrentTarget, req => me.hasVisibleAura("Icy Veins")),
+      spell.cast("Flurry", this.getCurrentTarget, req => me.hasAuraByMe("Icy Veins")),
       //actions.ss_st += /ice_lance,if=buff.fingers_of_frost.react
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Fingers of Frost")),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAuraByMe("Fingers of Frost")),
       //actions.ss_st += /frostbolt
       spell.cast("Frostbolt", this.getCurrentTarget),
       //actions.aoe += /call_action_list,name=movement
@@ -251,28 +251,28 @@ export class NuclearFrostMageBehavior extends Behavior {
       //actions.st += /flurry,if=cooldown_react&remaining_winters_chill=0&debuff.winters_chill.down&(((prev_gcd.1.frostbolt | prev_gcd.1.frostfire_bolt) & buff.icicles.react >= 3 | (prev_gcd.1.frostbolt | prev_gcd.1.frostfire_bolt) & buff.brain_freeze.react) | prev_gcd.1.glacial_spike | talent.glacial_spike & buff.icicles.react=4 & !buff.fingers_of_frost.react) | buff.excess_frost.up & buff.frostfire_empowerment.up
       spell.cast("Flurry", this.getCurrentTarget, req => this.remainingWintersChill() == 0 /** @todo fully implement logic for Flurry */),
       //actions.st += /ice_lance,if=talent.glacial_spike&debuff.winters_chill.down&buff.icicles.react=4&buff.fingers_of_frost.react
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAura("Glacial Spike") && this.getCurrentTarget()?.hasVisibleAura("Winter's Chill") && me.getAuraStacks("Icicles") === 4 && me.hasVisibleAura("Fingers of Frost")),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Glacial Spike") && this.getCurrentTarget()?.hasAuraByMe("Winter's Chill") && me.getAuraStacks("Icicles") === 4 && me.hasAuraByMe("Fingers of Frost")),
       //actions.st += /ray_of_frost,if=remaining_winters_chill=1
       spell.cast("Ray of Frost", this.getCurrentTarget, req => this.remainingWintersChill() == 1),
       //actions.st += /glacial_spike,if=buff.icicles.react=5&(action.flurry.cooldown_react|remaining_winters_chill)
       spell.cast("Glacial Spike", this.getCurrentTarget, req => me.getAuraStacks("Icicles") === 5 && this.remainingWintersChill() > 0),
       //actions.st += /frozen_orb,if=buff.fingers_of_frost.react<2&(!talent.ray_of_frost|cooldown.ray_of_frost.remains)
-      spell.cast("Frozen Orb", this.getCurrentTarget, req => this.facingForFrozenOrb() && me.getAuraStacks("Fingers of Frost") < 2 && (!me.hasAura("Ray of Frost") || !spell.getCooldown("Ray of Frost").ready)),
+      spell.cast("Frozen Orb", this.getCurrentTarget, req => this.facingForFrozenOrb() && me.getAuraStacks("Fingers of Frost") < 2 && (!me.hasVisibleAura("Ray of Frost") || !spell.getCooldown("Ray of Frost").ready)),
       //actions.st += /cone_of_cold,if=talent.coldest_snap&cooldown.comet_storm.remains>10&cooldown.frozen_orb.remains>10&remaining_winters_chill=0&active_enemies>=3
-      spell.cast("Cone of Cold", on => me, req => me.hasAura("Coldest Snap") && spell.getCooldown("Comet Storm").timeleft > 10000 && spell.getCooldown("Frozen Orb") > 10000 && this.remainingWintersChill() == 0 && this.enemiesInFrontOfMe() >= 3),
+      spell.cast("Cone of Cold", on => me, req => me.hasVisibleAura("Coldest Snap") && spell.getCooldown("Comet Storm").timeleft > 10000 && spell.getCooldown("Frozen Orb") > 10000 && this.remainingWintersChill() == 0 && this.enemiesInFrontOfMe() >= 3),
       //actions.st += /blizzard,if=active_enemies>=2&talent.ice_caller&talent.freezing_rain&(!talent.splintering_cold&!talent.ray_of_frost|buff.freezing_rain.up|active_enemies>=3)
-      spell.cast("Blizzard", this.getCurrentTarget, req => this.enemiesAroundTarget(20) >= 2 && me.hasAura("Ice Caller") && me.hasAura("Freezing Rain") && (!me.hasAura("Splintering Cold") && !me.hasAura("Ray of Frost") || me.hasVisibleAura("Freezing Rain") || this.enemiesAroundTarget(20) >= 3)),
+      spell.cast("Blizzard", this.getCurrentTarget, req => this.enemiesAroundTarget(20) >= 2 && me.hasVisibleAura("Ice Caller") && me.hasVisibleAura("Freezing Rain") && (!me.hasVisibleAura("Splintering Cold") && !me.hasVisibleAura("Ray of Frost") || me.hasAuraByMe("Freezing Rain") || this.enemiesAroundTarget(20) >= 3)),
       //actions.st += /shifting_power,if=(buff.icy_veins.down|!talent.deaths_chill)&cooldown.frozen_orb.remains>10&(!talent.comet_storm|cooldown.comet_storm.remains>10)&(!talent.ray_of_frost|cooldown.ray_of_frost.remains>10)|cooldown.icy_veins.remains<20
       spell.cast("Shifting Power", on => me, req =>
-        (!me.hasVisibleAura("Icy Veins") && !me.hasAura("Death's Chill")) &&
+        (!me.hasAuraByMe("Icy Veins") && !me.hasVisibleAura("Death's Chill")) &&
         spell.getCooldown("Frozen Orb").timeleft > 10000 &&
-        (!me.hasAura("Comet Storm") || spell.getCooldown("Comet Storm").timeleft > 10000) &&
-        (!me.hasAura("Ray of Frost") || spell.getCooldown("Ray of Frost").timeleft > 10000) ||
+        (!me.hasVisibleAura("Comet Storm") || spell.getCooldown("Comet Storm").timeleft > 10000) &&
+        (!me.hasVisibleAura("Ray of Frost") || spell.getCooldown("Ray of Frost").timeleft > 10000) ||
         spell.getCooldown("Icy Veins").timeleft < 20000),
       //actions.st += /glacial_spike,if=buff.icicles.react=5
       spell.cast("Glacial Spike", this.getCurrentTarget, req => me.getAuraStacks("Icicles") == 5),
       //actions.st += /ice_lance,if=buff.fingers_of_frost.react&!prev_gcd.1.glacial_spike|remaining_winters_chill
-      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasVisibleAura("Fingers of Frost")),
+      spell.cast("Ice Lance", this.getCurrentTarget, req => me.hasAuraByMe("Fingers of Frost")),
       //actions.st += /ice_nova,if=active_enemies>=4
       spell.cast("Ice Nova", this.getCurrentTarget, req => this.enemiesAroundTarget(8) >= 4),
       //actions.st += /frostbolt
@@ -289,11 +289,11 @@ export class NuclearFrostMageBehavior extends Behavior {
         //actions.movement = any_blink,if= movement.distance > 10
 
         //actions.movement += /ice_floes,if=buff.ice_floes.down
-        spell.cast("Ice Floes", on => me, req => !me.hasVisibleAura("Ice Floes")),
+        spell.cast("Ice Floes", on => me, req => !me.hasAuraByMe("Ice Floes")),
         //actions.movement += /ice_nova
         spell.cast("Ice Nova", on => me, this.getCurrentTarget),
         //actions.movement += /cone_of_cold,if=!talent.coldest_snap&active_enemies>=2
-        spell.cast("Cone of Cold", req => !me.hasAura("Coldest Snap") && this.enemiesInFrontOfMe() >= 2),
+        spell.cast("Cone of Cold", req => !me.hasVisibleAura("Coldest Snap") && this.enemiesInFrontOfMe() >= 2),
         //actions.movement += /arcane_explosion,if=mana.pct>30&active_enemies>=2
         spell.cast("Arcane Explosion", req => me.pctPower > 30 && this.enemiesAroundMe(8) >= 2),
         //actions.movement += /fire_blast
