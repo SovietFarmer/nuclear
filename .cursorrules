@@ -39,6 +39,10 @@ so you know what methods are actually available and how they work under the hood
 - me.currentChannel may not report all channeled spells. Always verify in-game.
 - spell.isOnCooldown() on untalented spells causes log spam every tick. Guard with
   spell.isSpellKnown() before calling isOnCooldown()/getCooldown() on optional talents.
+- hasVisibleAura() / hasVisibleAuraByMe() ONLY work on yourself (me). They do NOT work
+  on other players, party members, or friends. For checking auras on other units, always
+  use hasAura() / hasAuraByMe() / getAura() / getAuraByMe(). Never use hasVisibleAura
+  on heal.friends.All members, combat.targets, or any unit that isn't me.
 
 # Rotation Design Patterns
 - Split cooldowns into burstCooldowns() (gated by burst toggle) and sustained damage.

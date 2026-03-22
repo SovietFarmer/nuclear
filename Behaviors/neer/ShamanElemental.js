@@ -11,6 +11,8 @@ const auras = {
   flameShock: 188389,
   lavaSurge: 77762,
   masterOfTheElements: 260734,
+  lightningShield: 192106,
+  skyfury: 462854,
 };
 
 export class ShamanElementalBehavior extends Behavior {
@@ -54,6 +56,8 @@ export class ShamanElementalBehavior extends Behavior {
     return new bt.Selector(
       common.waitForNotSitting(),
       common.waitForNotMounted(),
+      spell.cast("Lightning Shield", on => me, ret => !me.hasVisibleAura(auras.lightningShield) && !me.hasVisibleAura("Ghost Wolf")),
+      spell.cast("Skyfury", on => me, ret => !me.hasVisibleAura(auras.skyfury) && !me.hasVisibleAura("Ghost Wolf")),
       common.waitForCastOrChannel(),
       common.waitForTarget(),
       common.waitForFacing(),

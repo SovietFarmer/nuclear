@@ -16,7 +16,7 @@ import objMgr from "@/Core/ObjectManager";
 const auras = {
   // Buffs
   lifebloom: 33763,
-  lifebloomResto: 188550, // Resto-specific Lifebloom ID
+  lifebloomResto: 1227806, // Midnight Resto-specific Lifebloom ID
   rejuvenation: 774,
   rejuvenationGermination: 155777,
   regrowth: 8936,
@@ -373,12 +373,18 @@ export class JmrRestoDruidBehavior extends Behavior {
           spell.cast("Mark of the Wild", on => this.getMarkOfTheWildTarget(), req =>
             Settings.MaintainMarkOfTheWild &&
             this.getMarkOfTheWildTarget() !== null &&
-            !spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Mark of the Wild")
+            spell.getTimeSinceLastCast("Mark of the Wild") > 10000
           ),
 
-        // Nature's Cure for dispels
-        spell.dispel("Nature's Cure", true, DispelPriority.Low, true, WoWDispelType.Magic, WoWDispelType.Curse, WoWDispelType.Poison),
+        // Nature's Cure for dispels (Magic, Curse, Poison on friends)
+        new bt.Decorator(
+          () => Settings.UseNaturesCure && spell.isSpellKnown("Nature's Cure"),
+          spell.dispel("Nature's Cure", true, DispelPriority.Low, true, WoWDispelType.Magic, WoWDispelType.Curse, WoWDispelType.Poison)
+        ),
+        // Nature's Cure for specific mythic debuffs (high priority override)
         spell.cast("Nature's Cure", on => this.findFriendWithMythicDebuff(), req =>
+            Settings.UseNaturesCure &&
+            spell.isSpellKnown("Nature's Cure") &&
             this.findFriendWithMythicDebuff() !== null
         ),
         spell.dispel("Soothe", false, DispelPriority.Low, false, WoWDispelType.Enrage),
@@ -2210,19 +2216,21 @@ export class JmrRestoDruidBehavior extends Behavior {
     return false;
   }
 
+  friendHasMotW(unit) {
+    return unit.hasAura(auras.markOfTheWild) || unit.hasAura("Mark of the Wild");
+  }
+
   getMarkOfTheWildTarget() {
-    // Check me first
-    if (!me.hasVisibleAura(auras.markOfTheWild)) {
+    if (!this.friendHasMotW(me)) {
       return me;
     }
 
-    // Check all friends within 40 yards
     return heal.friends.All.find(friend =>
       friend &&
       !friend.deadOrGhost &&
       friend.isPlayer() &&
       me.distanceTo(friend) <= 40 &&
-      !friend.hasVisibleAura(auras.markOfTheWild)
+      !this.friendHasMotW(friend)
     ) || null;
   }
 
@@ -2287,7 +2295,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend &&
       !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
-      !friend.hasVisibleAuraByMe(auras.symbioticRelationship)
+      !friend.hasAuraByMe(auras.symbioticRelationship) && !friend.hasAuraByMe("Symbiotic Relationship")
     ) || null;
   }
 
@@ -2304,7 +2312,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       friend &&
       !friend.deadOrGhost &&
       me.distanceTo(friend) <= 40 &&
-      friend.hasVisibleAura(440313)
+      friend.hasAura(440313)
     );
   }
 
