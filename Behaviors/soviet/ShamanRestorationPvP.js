@@ -118,7 +118,7 @@ export class ShamanRestorationPvP extends Behavior {
 
   ensureBuffs() {
     return new bt.Selector(
-      spell.cast("Skyfury", on => me, ret => !me.hasAura("Skyfury") && !me.hasAuraByMe("Ghost Wolf")),
+      spell.cast("Skyfury", on => me, ret => !me.hasVisibleAura("Skyfury") && !me.hasAuraByMe("Ghost Wolf")),
       spell.cast("Water Shield", on => me, ret => !me.hasAura(auras.waterShield) && !me.hasAuraByMe("Ghost Wolf")),
       spell.cast("Earthliving Weapon", on => me, ret => !me.hasAura(auras.earthlivingWeapon) && !me.hasAuraByMe("Ghost Wolf")),
       spell.cast("Earth Shield", on => me, ret => !me.hasAura(auras.earthShieldSelf) && !me.hasAuraByMe("Ghost Wolf")),

@@ -153,7 +153,7 @@ export class DeathKnightBloodBehavior extends Behavior {
           // --- high_prio_actions ---
           spell.cast("Raise Dead", req => me.inCombat() && me.target),
           spell.cast("Death Strike", on => this.getCurrentTarget(), req => {
-            const coag = me.getAura("Coagulopathy");
+            const coag = me.getVisibleAura("Coagulopathy");
             return coag && coag.remaining > 0 && coag.remaining <= 1500;
           }),
 
@@ -202,7 +202,7 @@ export class DeathKnightBloodBehavior extends Behavior {
       spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() < 50),
       // Bone Shield maintenance (at least 5 stacks)
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return !bs || bs.stacks < 5 || bs.remaining < 3000;
       }),
       // Blood Boil if DRW Blood Plague copy not ticking on target
@@ -228,12 +228,12 @@ export class DeathKnightBloodBehavior extends Behavior {
       spell.cast("Death Strike", on => this.getCurrentTarget(), req => this.runicPowerDeficit() < 50),
       // Bone Shield emergency (about to expire, rune-efficient)
       spell.cast("Death's Caress", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return (!bs || bs.remaining < 3000 || bs.stacks <= 1) && me.powerByType(PowerType.Runes) < 4;
       }),
       // Bone Shield maintenance (at least 5 stacks, or about to expire)
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return !bs || bs.stacks < 5 || bs.remaining < 3000;
       }),
       // Death and Decay uptime or Crimson Scourge proc
@@ -266,12 +266,12 @@ export class DeathKnightBloodBehavior extends Behavior {
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => me.hasAura(auras.exterminate)),
       // Death's Caress for Bone Shield (rune-efficient when low on runes)
       spell.cast("Death's Caress", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return (!bs || bs.remaining < 3000 || bs.stacks < 6) && me.powerByType(PowerType.Runes) < 4;
       }),
       // Marrowrend for Bone Shield maintenance
       spell.cast("Marrowrend", on => this.getCurrentTarget(), req => {
-        const bs = me.getAura("Bone Shield");
+        const bs = me.getVisibleAura("Bone Shield");
         return !bs || bs.remaining < 3000 || bs.stacks < 6;
       }),
       // Death Strike dump

@@ -76,9 +76,9 @@ export class ShamanRestorationBehavior extends Behavior {
       ),
 
       // Buff maintenance
-      spell.cast("Skyfury", on => me, req => !me.hasAura("Skyfury") && !me.hasAuraByMe("Ghost Wolf")),
-      spell.cast("Water Shield", on => me, req => !me.hasAura("Water Shield") && !me.hasAuraByMe("Ghost Wolf")),
-      spell.cast("Earth Shield", on => me, req => !me.hasAura("Earth Shield") && !me.hasAuraByMe("Ghost Wolf")),
+      spell.cast("Skyfury", on => me, req => !me.hasVisibleAura("Skyfury") && !me.hasAuraByMe("Ghost Wolf")),
+      spell.cast("Water Shield", on => me, req => !me.hasVisibleAura("Water Shield") && !me.hasAuraByMe("Ghost Wolf")),
+      spell.cast("Earth Shield", on => me, req => !me.hasVisibleAura("Earth Shield") && !me.hasAuraByMe("Ghost Wolf")),
       spell.cast("Earthliving Weapon", on => me, req => !me.hasAura(auras.earthlivingWeapon) && !me.hasAuraByMe("Ghost Wolf")),
 
       // Off-GCD interrupt (30s CD, 4s spell lock -- only healer interrupt in Midnight)
@@ -247,7 +247,7 @@ export class ShamanRestorationBehavior extends Behavior {
   }
 
   isAscendanceActive() {
-    return me.hasAura(auras.ascendance) || me.hasAura("Ascendance");
+    return me.hasAura(auras.ascendance) || me.hasVisibleAura("Ascendance");
   }
 
   // --- Target helpers ---

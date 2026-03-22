@@ -410,7 +410,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   buildDefensives() {
     return new bt.Selector(
       // Battle Shout
-      spell.cast("Battle Shout", () => !me.hasAura("Battle Shout")),
+      spell.cast("Battle Shout", () => !me.hasVisibleAura("Battle Shout")),
 
       // Defensive abilities with user options
       spell.cast("Rallying Cry", () => Settings.UseRallyingCry && me.pctHealth < Settings.RallyingCryHealthPct),
@@ -675,28 +675,28 @@ export class JmrSimcFuryBehavior extends Behavior {
 
   shouldUseRecklessness() {
     if (this.shouldUseBurstAbility()) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
 
     if (Settings.IgnoreTimeToDeath) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
     
     const target = this.getCurrentTarget();
-    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasAura("Smothering Shadows");
+    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
 
   shouldUseAvatar() {
     if (this.shouldUseBurstAbility()) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
 
     if (Settings.IgnoreTimeToDeath) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
     
     const target = this.getCurrentTarget();
-    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasAura("Smothering Shadows");
+    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
 
   handleBurstToggle() {
@@ -733,28 +733,28 @@ export class JmrSimcFuryBehavior extends Behavior {
 
   shouldUseChampionsSpear() {
     if (this.shouldUseBurstAbility()) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
 
     if (Settings.IgnoreTimeToDeath) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
     
     const target = this.getCurrentTarget();
-    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasAura("Smothering Shadows");
+    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
 
   shouldUseOdynsFury() {
     if (this.shouldUseBurstAbility()) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
 
     if (Settings.IgnoreTimeToDeath) {
-      return !me.hasAura("Smothering Shadows");
+      return !me.hasVisibleAura("Smothering Shadows");
     }
     
     const target = this.getCurrentTarget();
-    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasAura("Smothering Shadows");
+    return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
 
   shouldUseOnGCDRacials() {
@@ -764,7 +764,7 @@ export class JmrSimcFuryBehavior extends Behavior {
     const timeToDeathOk = Settings.IgnoreTimeToDeath || target.timeToDeath() > Settings.MinTimeToDeath;
     
     return !me.hasAuraByMe("Recklessness") &&
-           timeToDeathOk && !me.hasAura("Smothering Shadows") &&
+           timeToDeathOk && !me.hasVisibleAura("Smothering Shadows") &&
            !me.hasAuraByMe("Avatar") &&
            me.powerByType(PowerType.Rage) < 80 &&
            !me.hasAuraByMe("Bloodbath") &&
@@ -974,7 +974,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   buildPVPDefensives() {
     return new bt.Selector(
       // Battle Shout
-      spell.cast("Battle Shout", () => !me.hasAura("Battle Shout")),
+      spell.cast("Battle Shout", () => !me.hasVisibleAura("Battle Shout")),
       
       // Defensive abilities with user options
       spell.cast("Rallying Cry", () => 

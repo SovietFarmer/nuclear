@@ -156,7 +156,7 @@ export class WarriorProtMidnight extends Behavior {
   isExecutePhase() {
     const target = this.getCurrentTarget();
     if (!target) return false;
-    return (me.hasAura("Massacre") && target.pctHealth <= 35) || target.pctHealth <= 20;
+    return (me.hasVisibleAura("Massacre") && target.pctHealth <= 35) || target.pctHealth <= 20;
   }
 
   getCurrentTarget() {

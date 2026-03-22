@@ -595,7 +595,7 @@ export class JmrRestoDruidBehavior extends Behavior {
       spell.cast("Regrowth", on => this.getRegrowthTarget(), req =>
         this.getRegrowthTarget() !== null &&
         this.getAbundanceStacks() >= 5 &&
-        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness") || me.hasAura("Incarnation: Tree of Life"))
+        (!me.isMoving() || me.hasAuraByMe("Nature's Swiftness") || me.hasVisibleAura("Incarnation: Tree of Life"))
       ),
     );
   }
