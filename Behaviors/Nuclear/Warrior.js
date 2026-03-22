@@ -60,7 +60,7 @@ export class NuclearWarriorFuryBehavior extends NuclearWarrior {
       common.waitForCastOrChannel(),
       common.waitForFacing(),
       spell.cast("Victory Rush", () => me.pctHealth < 70),
-      spell.cast("Bloodthirst", () => me.pctHealth < 70 && me.hasVisibleAura("Enraged Regeneration")),
+      spell.cast("Bloodthirst", () => me.pctHealth < 70 && me.hasAuraByMe("Enraged Regeneration")),
       this.useCooldowns(),
       new bt.Decorator(
         () => Boolean(me.getUnitsAroundCount(8) >= 2),

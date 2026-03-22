@@ -56,8 +56,8 @@ export class ShamanElementalBehavior extends Behavior {
     return new bt.Selector(
       common.waitForNotSitting(),
       common.waitForNotMounted(),
-      spell.cast("Lightning Shield", on => me, ret => !me.hasVisibleAura(auras.lightningShield) && !me.hasVisibleAura("Ghost Wolf")),
-      spell.cast("Skyfury", on => me, ret => !me.hasVisibleAura(auras.skyfury) && !me.hasVisibleAura("Ghost Wolf")),
+      spell.cast("Lightning Shield", on => me, ret => !me.hasAuraByMe(auras.lightningShield) && !me.hasAuraByMe("Ghost Wolf")),
+      spell.cast("Skyfury", on => me, ret => !me.hasAura(auras.skyfury) && !me.hasAuraByMe("Ghost Wolf")),
       common.waitForCastOrChannel(),
       common.waitForTarget(),
       common.waitForFacing(),

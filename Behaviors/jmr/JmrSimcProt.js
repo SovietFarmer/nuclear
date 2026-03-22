@@ -64,7 +64,7 @@ export class WarriorProtMidnight extends Behavior {
           common.waitForFacing(),
           common.waitForTarget(),
 
-          spell.cast("Battle Shout", on => me, req => !me.hasVisibleAura(auras.battle_shout)),
+          spell.cast("Battle Shout", on => me, req => !me.hasAura(auras.battle_shout)),
 
           spell.cast("Charge",
             on => me.target,
@@ -100,10 +100,10 @@ export class WarriorProtMidnight extends Behavior {
         return (!sb || sb.remaining < 2000) && me.powerByType(PowerType.Rage) >= 30;
       }),
       spell.cast("Shield Wall", on => me, req =>
-        me.pctHealth < Settings.JmrProtShieldWallHP && !me.hasVisibleAura(auras.last_stand)
+        me.pctHealth < Settings.JmrProtShieldWallHP && !me.hasAuraByMe(auras.last_stand)
       ),
       spell.cast("Last Stand", on => me, req =>
-        me.pctHealth < Settings.JmrProtLastStandHP && !me.hasVisibleAura(auras.shield_wall)
+        me.pctHealth < Settings.JmrProtLastStandHP && !me.hasAuraByMe(auras.shield_wall)
       ),
       spell.cast("Rallying Cry", on => me, req => me.pctHealth < Settings.JmrProtRallyingCryHP),
     );
@@ -173,7 +173,7 @@ export class WarriorProtMidnight extends Behavior {
   }
 
   shouldSpellReflect() {
-    if (me.hasVisibleAura("Spell Reflection")) return false;
+    if (me.hasAuraByMe("Spell Reflection")) return false;
     for (const enemy of combat.targets) {
       if (!enemy.isCastingOrChanneling || !enemy.spellInfo) continue;
       const target = enemy.spellInfo.spellTargetGuid;

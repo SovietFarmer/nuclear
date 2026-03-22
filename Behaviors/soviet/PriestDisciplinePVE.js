@@ -12,6 +12,7 @@ import Settings from "@/Core/Settings";
 
 const auras = {
   painSuppression: 33206,
+  powerWordFortitude: 21562,
   powerOfTheDarkSide: 198068,
   shadowWordPain: 589,
   powerWordShield: 17,
@@ -52,7 +53,8 @@ export class PriestDiscipline extends Behavior {
 
       // Off-GCD
       spell.cast("Fade", on => me, req => me.inCombat() && (me.isTanking() || me.effectiveHealthPercent < 80)),
-      spell.cast("Power Word: Fortitude", on => me, req => !me.hasVisibleAura(21562)),
+      spell.cast("Power Word: Fortitude", on => me, ret =>
+        !me.hasAura(auras.powerWordFortitude)),
 
       new bt.Decorator(
         ret => !spell.isGlobalCooldown(),
@@ -94,7 +96,7 @@ export class PriestDiscipline extends Behavior {
 
       // Rapture active -- spam PW:S on everyone
       spell.cast("Power Word: Shield", on => this.findFriendWithoutShield(), ret =>
-        me.hasVisibleAura("Rapture") && this.findFriendWithoutShield() !== undefined),
+        me.hasAuraByMe("Rapture") && this.findFriendWithoutShield() !== undefined),
 
       // Defensive Penance when someone is critically low
       spell.cast("Penance", on => this.healTarget, ret =>
@@ -172,7 +174,7 @@ export class PriestDiscipline extends Behavior {
       // PW:S on hurt ally -- absorb + atonement apply/refresh
       spell.cast("Power Word: Shield", on => this.healTarget, ret =>
         this.healTarget && !this.hasShield(this.healTarget)
-        && !me.hasVisibleAura("Rapture")
+        && !me.hasAuraByMe("Rapture")
         && this.healTarget.effectiveHealthPercent < 85),
 
       // Defensive Penance on hurt ally (blocked by Void Shield proc)
@@ -182,7 +184,7 @@ export class PriestDiscipline extends Behavior {
       // Plea for atonement apply or refresh when expiring
       spell.cast("Plea", on => this.healTarget, ret =>
         this.healTarget && this.healTarget.effectiveHealthPercent < 85
-        && !me.hasVisibleAura("Rapture")
+        && !me.hasAuraByMe("Rapture")
         && (!this.hasAtonement(this.healTarget)
           || this.healTarget.getAuraByMe(auras.atonement)?.remaining < 4000)),
 

@@ -27,11 +27,11 @@ export class NuclearDemonhunterVengeanceBehavior extends Behavior {
         common.waitForFacing(),
 
         spell.cast("Sigil of Flame", on => me.target),
-        spell.cast("Demon Spikes", req => me.pctHealth < 70 && !me.hasVisibleAura("Demon Spikes")),
+        spell.cast("Demon Spikes", req => me.pctHealth < 70 && !me.hasAuraByMe("Demon Spikes")),
         new bt.Decorator(
           req => me.isWithinMeleeRange(me.target),
           new bt.Selector(
-            spell.cast("Immolation Aura", req => !me.hasVisibleAura("Immolation Aura")),
+            spell.cast("Immolation Aura", req => !me.hasAuraByMe("Immolation Aura")),
             spell.cast("Fel Devastation", req => me.power > 50),
             //spell.cast("Metamorphosis"),
             spell.cast("Fracture", req => this.soulFragments() < 4 && me.power < 75),
