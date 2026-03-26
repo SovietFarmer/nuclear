@@ -30,6 +30,7 @@ export class DeathKnightUnholy extends Behavior {
   name = "Death Knight (Unholy) PvP";
   context = BehaviorContext.Any; // PvP or PvE
   specialization = Specialization.DeathKnight.Unholy
+  _strangulateTarget = undefined;
 
   build() {
     return new bt.Selector(
@@ -49,7 +50,11 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Huddle", ret => Pet.current &&
         Pet.current.hasAuraByMe(auras.darkTransformation) &&
         Spell.getTimeSinceLastCast("Dark Transformation") < 5000),
-      spell.cast("Strangulate", on => this.strangulateTarget(), ret => me.target && me.target.pctHealth < 70 && this.strangulateTarget() !== undefined),
+      spell.cast(
+        "Strangulate",
+        on => (this._strangulateTarget = this.strangulateTarget()),
+        ret => me.target && me.target.pctHealth < 70 && this._strangulateTarget !== undefined
+      ),
       spell.cast("Blinding Sleet", on => this.blindingSleetTarget(), ret => this.blindingSleetTarget() !== undefined),
       new bt.Decorator(
         ret => !spell.isGlobalCooldown(),
@@ -140,7 +145,13 @@ export class DeathKnightUnholy extends Behavior {
     const nearbyEnemies = me.getPlayerEnemies(20);
 
     for (const unit of nearbyEnemies) {
-      if (unit.isHealer() && !unit.isCCd() && unit.canCC() && unit.getDR("silence") === 0) {
+      if (
+        unit.isHealer() &&
+        me.isFacing(unit) &&
+        !unit.isCCd() &&
+        unit.canCC() &&
+        unit.getDR("silence") === 0
+      ) {
         return unit;
       }
     }
