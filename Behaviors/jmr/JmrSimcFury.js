@@ -894,13 +894,20 @@ export class JmrSimcFuryBehavior extends Behavior {
         return true;
       }),
       
-      // CC enemies with major cooldowns
-      spell.cast(236077, on => this.findDisarmTarget(), req => this.findDisarmTarget() !== null),
-      spell.cast("Storm Bolt", on => this.findStormBoltCCTarget(), req => this.findStormBoltCCTarget() !== null),
-      spell.cast("Intimidating Shout", on => this.findIntimidatingShoutTarget(), req => this.findIntimidatingShoutTarget() !== null),
-      
       // Defensive abilities (excluding pummel/storm bolt interrupts)
       this.buildPVPDefensives(),
+
+      // Opportunistic CC (kept outside burst windows so it doesn't steal kill setup GCDs)
+      new bt.Decorator(
+        () => !this.shouldUseBurstAbility(),
+        new bt.Selector(
+          spell.cast(236077, on => this.findDisarmTarget(), req => this.findDisarmTarget() !== null),
+          spell.cast("Shockwave", on => this.findShockwaveUtilityTarget(), req => spell.isSpellKnown("Shockwave") && this.findShockwaveUtilityTarget() !== null),
+          spell.cast("Storm Bolt", on => this.findStormBoltCCTarget(), req => this.findStormBoltCCTarget() !== null),
+          spell.cast("Intimidating Shout", on => this.findIntimidatingShoutTarget(), req => this.findIntimidatingShoutTarget() !== null),
+        ),
+        new bt.Action(() => bt.Status.Success)
+      ),
       
       // Berserker Shout if near healer and healer is disoriented
       spell.cast("Berserker Shout", () => Settings.UseBerserkerShout && this.shouldUseBerserkerShout()),
@@ -920,27 +927,38 @@ export class JmrSimcFuryBehavior extends Behavior {
       
       // CC current target with Storm Bolt if healer has stun DR
       spell.cast("Storm Bolt", on => this.getCurrentTargetPVP(), req => this.shouldStormBoltCurrentTarget() && this.shouldUseBurstAbility()),
-      
-      // Champion's Spear current target
-      spell.cast("Champion's Spear", on => this.getCurrentTargetPVP(), req => this.shouldUseChampionsSpear() && this.shouldUseBurstAbility()),
+
+      // Shockwave setup: DR/canCC gated short AoE stun during burst windows
+      spell.cast("Shockwave", on => this.findShockwaveBurstTarget(), req => spell.isSpellKnown("Shockwave") && this.findShockwaveBurstTarget() !== null),
       
       // Recklessness
       spell.cast("Recklessness", req => Settings.UseRecklessness && this.overlayToggles.recklessness.value && this.shouldUseBurstAbility()),
       
-      // Rampage
-      spell.cast("Rampage", on => this.getCurrentTargetPVP()),
-      
       // Avatar
       spell.cast("Avatar", req => Settings.UseAvatar && this.overlayToggles.avatar.value && this.shouldUseBurstAbility()),
-      
-      // Execute if Sudden Death is up
-      spell.cast("Execute", on => this.getCurrentTargetPVP(), req => me.hasAura(auras.suddenDeath)),
+
+      // Bladestorm is a primary burst button in PvP
+      spell.cast("Bladestorm", on => this.getCurrentTargetPVP()),
+
+      // Champion's Spear current target
+      spell.cast("Champion's Spear", on => this.getCurrentTargetPVP(), req => this.shouldUseChampionsSpear() && this.shouldUseBurstAbility()),
       
       // Rampage if no enrage or rage capped
       spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAura(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
-      
-      // Bladestorm
-      spell.cast("Bladestorm", on => this.getCurrentTargetPVP()),
+
+      // Mountain Thane proc spender during burst
+      spell.cast("Thunder Blast", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
+      spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
+
+      // Execute if Sudden Death is up
+      spell.cast("Execute", on => this.getCurrentTargetPVP(), req => me.hasAura(auras.suddenDeath)),
+
+      // Follow-up burst fillers
+      spell.cast("Rampage", on => this.getCurrentTargetPVP()),
+      spell.cast("Raging Blow", on => this.getCurrentTargetPVP()),
+      spell.cast("Bloodthirst", on => this.getCurrentTargetPVP()),
+      spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes")),
+      spell.cast("Whirlwind", on => this.getCurrentTargetPVP()),
       
       // Continue with regular priority
       this.buildPVPRegularPriority()
@@ -951,24 +969,29 @@ export class JmrSimcFuryBehavior extends Behavior {
     return new bt.Selector(
       // Rampage if no enrage or rage capped
       spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAura(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
+
+      // Mountain Thane proc spender in sustained pressure
+      spell.cast("Thunder Blast", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
+      spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
       
+      // Execute if Sudden Death is up
+      spell.cast("Execute", on => this.getCurrentTargetPVP(), req => me.hasAura(auras.suddenDeath)),
+
       // Execute if Slayer's Dominance at 3 stacks
       spell.cast("Execute", on => this.getCurrentTargetPVP(), req => this.getCurrentTargetPVP()?.getAuraStacks("Marked for Execution") === 3),
       
       // Rampage
       spell.cast("Rampage", on => this.getCurrentTargetPVP()),
       
-      // Execute
-      spell.cast("Execute", on => this.getCurrentTargetPVP()),
-      
-      // Bloodthirst at 3+ stacks of Bloodcraze
-      spell.cast("Bloodthirst", on => this.getCurrentTargetPVP(), req => me.getAuraStacks(393951) >= 3),
-      
       // Raging Blow
       spell.cast("Raging Blow", on => this.getCurrentTargetPVP()),
       
       // Bloodthirst
-      spell.cast("Bloodthirst", on => this.getCurrentTargetPVP())
+      spell.cast("Bloodthirst", on => this.getCurrentTargetPVP()),
+
+      // Fallbacks when nothing else is available
+      spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes")),
+      spell.cast("Whirlwind", on => this.getCurrentTargetPVP())
     );
   }
 
@@ -1109,6 +1132,39 @@ export class JmrSimcFuryBehavior extends Behavior {
       }
     }
     return null;
+  }
+
+  isShockwaveEligibleTarget(enemy) {
+    return enemy &&
+      enemy.isPlayer() &&
+      me.distanceTo(enemy) <= 10 &&
+      me.isFacing(enemy) &&
+      enemy.canCC() &&
+      drTracker.getDRStacks(enemy.guid, "stun") < 2 &&
+      !pvpHelpers.hasImmunity(enemy) &&
+      !enemy.isCCd();
+  }
+
+  findShockwaveBurstTarget() {
+    const killTarget = this.getCurrentTargetPVP();
+    if (this.isShockwaveEligibleTarget(killTarget)) {
+      return killTarget;
+    }
+
+    const enemies = me.getEnemies();
+    const eligible = enemies.filter(enemy => this.isShockwaveEligibleTarget(enemy));
+    return eligible.length >= 2 ? eligible[0] : null;
+  }
+
+  findShockwaveUtilityTarget() {
+    const enemies = me.getEnemies();
+    const eligible = enemies.filter(enemy => this.isShockwaveEligibleTarget(enemy));
+    if (eligible.length === 0) return null;
+
+    const majorCooldownTarget = eligible.find(enemy => this.hasMajorCooldowns(enemy));
+    if (majorCooldownTarget) return majorCooldownTarget;
+
+    return eligible.length >= 2 ? eligible[0] : null;
   }
 
   findIntimidatingShoutTarget() {
