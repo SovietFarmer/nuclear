@@ -51,12 +51,6 @@ export class WarriorFuryPvP extends Behavior {
       ]
     },
     {
-      header: "Interrupt",
-      options: [
-        { type: "checkbox", uid: "UsePummel", text: "Use Pummel (standard interrupt)", default: true }
-      ]
-    },
-    {
       header: "Major Cooldowns",
       options: [
         { type: "checkbox", uid: "UseRecklessness", text: "Use Recklessness", default: true },
@@ -78,10 +72,7 @@ export class WarriorFuryPvP extends Behavior {
       common.waitForCastOrChannel(),
       common.waitForTarget(),
       common.waitForFacing(),
-      new bt.Decorator(
-        ret => Settings.UsePummel,
-        spell.interrupt("Pummel", true)
-      ),
+      spell.interrupt("Pummel", true),
       new bt.Decorator(
         ret => !spell.isGlobalCooldown(),
         new bt.Selector(
