@@ -13,6 +13,7 @@ import { drHelpers } from "@/Data/PVPDRList";
 import KeyBinding from "@/Core/KeyBinding";
 
 const auras = {
+  battleShout: 6673,
   enrage: 184362,
   whirlwind: 85739,
   thunderBlast: 435615,
@@ -166,7 +167,7 @@ export class JmrSimcFuryBehavior extends Behavior {
 
               // Trinkets and racials
               new bt.Decorator(
-                () => this.shouldUseAvatar() && (me.hasAuraByMe("Recklessness") || me.hasAuraByMe("Avatar")),
+                () => this.shouldUseAvatar() && (me.hasAura("Recklessness") || me.hasAura("Avatar")),
                 this.useTrinkets(),
                 new bt.Action(() => bt.Status.Success)
               ),
@@ -410,13 +411,13 @@ export class JmrSimcFuryBehavior extends Behavior {
   buildDefensives() {
     return new bt.Selector(
       // Battle Shout
-      spell.cast("Battle Shout", () => !me.hasVisibleAura("Battle Shout")),
+      spell.cast("Battle Shout", () => !me.hasAura(auras.battleShout)),
 
       // Defensive abilities with user options
       spell.cast("Rallying Cry", () => Settings.UseRallyingCry && me.pctHealth < Settings.RallyingCryHealthPct),
       spell.cast("Victory Rush", () => Settings.UseVictoryRush && me.effectiveHealthPercent < Settings.VictoryRushHealthPct),
       spell.cast("Enraged Regeneration", () => Settings.UseEnragedRegeneration && me.pctHealth < Settings.EnragedRegenerationHealthPct),
-      spell.cast("Bloodthirst", () => Settings.UseBloodthirstHealing && me.pctHealth < Settings.BloodthirstHealingHealthPct && me.hasAuraByMe("Enraged Regeneration")),
+      spell.cast("Bloodthirst", () => Settings.UseBloodthirstHealing && me.pctHealth < Settings.BloodthirstHealingHealthPct && me.hasAura("Enraged Regeneration")),
 
       // Interrupts only for PVE (not PVP) - respect both settings and overlay toggles
       new bt.Decorator(
@@ -451,27 +452,27 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Rampage", on => this.getCurrentTarget(), req =>
         (this.getEnemiesInRange(8) >= 2 && me.powerByType(PowerType.Rage) >= 110) ||
         (this.getEnemiesInRange(8) < 2 && me.powerByType(PowerType.Rage) >= 100) ||
-        !me.hasAuraByMe(auras.enrage) ||
+        !me.hasAura(auras.enrage) ||
         this.getAuraRemainingTime(auras.enrage) <= 1500
       ),
       
       // actions.slayer+=/execute,if=buff.ashen_juggernaut.up&buff.ashen_juggernaut.remains<=gcd
-      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAuraByMe("Ashen Juggernaut") && this.getAuraRemainingTime("Ashen Juggernaut") <= 1.5),
+      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura("Ashen Juggernaut") && this.getAuraRemainingTime("Ashen Juggernaut") <= 1.5),
       
       // actions.slayer+=/champions_spear,if=buff.enrage.up&(cooldown.bladestorm.remains>=2|cooldown.bladestorm.remains>=16&debuff.marked_for_execution.stack=3)
-      spell.cast("Champion's Spear", on => this.getCurrentTarget(), req => this.shouldUseChampionsSpear() && me.hasAuraByMe(auras.enrage) && (spell.getCooldown("Bladestorm").timeleft >= 2 || (spell.getCooldown("Bladestorm").timeleft >= 16 && this.getCurrentTarget().getAuraStacks("Marked for Execution") === 3))),
+      spell.cast("Champion's Spear", on => this.getCurrentTarget(), req => this.shouldUseChampionsSpear() && me.hasAura(auras.enrage) && (spell.getCooldown("Bladestorm").timeleft >= 2 || (spell.getCooldown("Bladestorm").timeleft >= 16 && this.getCurrentTarget().getAuraStacks("Marked for Execution") === 3))),
       
       // actions.slayer+=/ravager,if=buff.enrage.up (guarded for Midnight)
-      spell.cast("Ravager", on => this.getCurrentTarget(), req => spell.isSpellKnown("Ravager") && me.hasAuraByMe(auras.enrage) && this.shouldUseBurstAbility()),
+      spell.cast("Ravager", on => this.getCurrentTarget(), req => spell.isSpellKnown("Ravager") && me.hasAura(auras.enrage) && this.shouldUseBurstAbility()),
       
       // actions.slayer+=/bladestorm,if=buff.enrage.up&(talent.reckless_abandon&cooldown.avatar.remains>=24|talent.anger_management&cooldown.recklessness.remains>=18)
-      spell.cast("Bladestorm", on => this.getCurrentTarget(), req => me.hasAuraByMe(auras.enrage) && ((this.hasTalent("Reckless Abandon") && spell.getCooldown("Avatar").timeleft >= 24) || (this.hasTalent("Anger Management") && spell.getCooldown("Recklessness").timeleft >= 18))),
+      spell.cast("Bladestorm", on => this.getCurrentTarget(), req => me.hasAura(auras.enrage) && ((this.hasTalent("Reckless Abandon") && spell.getCooldown("Avatar").timeleft >= 24) || (this.hasTalent("Anger Management") && spell.getCooldown("Recklessness").timeleft >= 18))),
       
       // actions.slayer+=/odyns_fury,if=(buff.enrage.up|talent.titanic_rage)&cooldown.avatar.remains
-      spell.cast("Odyn's Fury", on => this.getCurrentTarget(), req => this.shouldUseOdynsFury() && (me.hasAuraByMe(auras.enrage) || this.hasTalent("Titanic Rage")) && spell.getCooldown("Avatar").timeleft > 0),
+      spell.cast("Odyn's Fury", on => this.getCurrentTarget(), req => this.shouldUseOdynsFury() && (me.hasAura(auras.enrage) || this.hasTalent("Titanic Rage")) && spell.getCooldown("Avatar").timeleft > 0),
 
       // Midnight: prioritize Execute on Sudden Death procs and in execute phase
-      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAuraByMe(auras.suddenDeath) || this.isExecutePhase()),
+      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) || this.isExecutePhase()),
       
       // actions.slayer+=/whirlwind,if=active_enemies>=2&talent.meat_cleaver&buff.meat_cleaver.stack=0
       spell.cast("Whirlwind", on => this.getCurrentTarget(), req => this.getEnemiesInRange(8) >= 2 && this.hasTalent("Meat Cleaver") && me.getAuraStacks(auras.whirlwind) === 0),
@@ -480,37 +481,37 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Execute", on => this.getCurrentTarget(), req => me.getAuraStacks(auras.suddenDeath) === 2 && this.getAuraRemainingTime(auras.suddenDeath) < 7000),
       
       // actions.slayer+=/execute,if=buff.sudden_death.up&buff.sudden_death.remains<2
-      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAuraByMe(auras.suddenDeath) && this.getAuraRemainingTime(auras.suddenDeath) < 2000),
+      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) && this.getAuraRemainingTime(auras.suddenDeath) < 2000),
       
       // actions.slayer+=/execute,if=buff.sudden_death.up&buff.imminent_demise.stack<3&cooldown.bladestorm.remains<25
-      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAuraByMe(auras.suddenDeath) && me.getAuraStacks("Imminent Demise") < 3 && spell.getCooldown("Bladestorm").timeleft < 25),
+      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) && me.getAuraStacks("Imminent Demise") < 3 && spell.getCooldown("Bladestorm").timeleft < 25),
       
       // actions.slayer+=/rampage,if=!buff.enrage.up|buff.slaughtering_strikes.stack>=4
-      spell.cast("Rampage", on => this.getCurrentTarget(), req => !me.hasAuraByMe(auras.enrage) || me.getAuraStacks("Slaughtering Strikes") >= 4),
+      spell.cast("Rampage", on => this.getCurrentTarget(), req => !me.hasAura(auras.enrage) || me.getAuraStacks("Slaughtering Strikes") >= 4),
       
       // actions.slayer+=/crushing_blow,if=action.raging_blow.charges=2|buff.brutal_finish.up&(!debuff.champions_might.up|debuff.champions_might.up&debuff.champions_might.remains>gcd)
-      spell.cast("Crushing Blow", on => this.getCurrentTarget(), req => spell.getCharges("Raging Blow") === 2 || (me.hasAuraByMe("Brutal Finish") && (!this.getCurrentTarget().hasAuraByMe("Champion's Might") || (this.getCurrentTarget().hasAuraByMe("Champion's Might") && this.getDebuffRemainingTime("Champion's Might") > 1.5)))),
+      spell.cast("Crushing Blow", on => this.getCurrentTarget(), req => spell.getCharges("Raging Blow") === 2 || (me.hasAura("Brutal Finish") && (!this.getCurrentTarget().hasAuraByMe("Champion's Might") || (this.getCurrentTarget().hasAuraByMe("Champion's Might") && this.getDebuffRemainingTime("Champion's Might") > 1.5)))),
       
       // actions.slayer+=/execute,if=debuff.marked_for_execution.stack=3
       spell.cast("Execute", on => this.getCurrentTarget(), req => this.getCurrentTarget().getAuraStacks("Marked for Execution") === 3),
       
       // actions.slayer+=/bloodbath,if=buff.bloodcraze.stack>=1|(talent.uproar&dot.bloodbath_dot.remains<40&talent.bloodborne)|buff.enrage.up&buff.enrage.remains<gcd
-      spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 1 || (this.hasTalent("Uproar") && this.getDebuffRemainingTime("Bloodbath") < 40 && this.hasTalent("Bloodborne")) || (me.hasAuraByMe(auras.enrage) && this.getAuraRemainingTime(auras.enrage) < 1500)),
+      spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 1 || (this.hasTalent("Uproar") && this.getDebuffRemainingTime("Bloodbath") < 40 && this.hasTalent("Bloodborne")) || (me.hasAura(auras.enrage) && this.getAuraRemainingTime(auras.enrage) < 1500)),
       
       // actions.slayer+=/raging_blow,if=buff.brutal_finish.up&buff.slaughtering_strikes.stack<5&(!debuff.champions_might.up|debuff.champions_might.up&debuff.champions_might.remains>gcd)
-      spell.cast("Raging Blow", on => this.getCurrentTarget(), req => me.hasAuraByMe("Brutal Finish") && me.getAuraStacks("Slaughtering Strikes") < 5 && (!this.getCurrentTarget().hasAuraByMe("Champion's Might") || (this.getCurrentTarget().hasAuraByMe("Champion's Might") && this.getDebuffRemainingTime("Champion's Might") > 1.5))),
+      spell.cast("Raging Blow", on => this.getCurrentTarget(), req => me.hasAura("Brutal Finish") && me.getAuraStacks("Slaughtering Strikes") < 5 && (!this.getCurrentTarget().hasAuraByMe("Champion's Might") || (this.getCurrentTarget().hasAuraByMe("Champion's Might") && this.getDebuffRemainingTime("Champion's Might") > 1.5))),
       
       // actions.slayer+=/bloodthirst,if=active_enemies>3
       spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => this.getEnemiesInRange(8) > 3),
       
       // actions.slayer+=/rampage,if=action.raging_blow.charges<=1&rage>=100&talent.anger_management&buff.recklessness.down
-      spell.cast("Rampage", on => this.getCurrentTarget(), req => spell.getCharges("Raging Blow") <= 1 && me.powerByType(PowerType.Rage) >= 100 && this.hasTalent("Anger Management") && !me.hasAuraByMe("Recklessness")),
+      spell.cast("Rampage", on => this.getCurrentTarget(), req => spell.getCharges("Raging Blow") <= 1 && me.powerByType(PowerType.Rage) >= 100 && this.hasTalent("Anger Management") && !me.hasAura("Recklessness")),
       
       // actions.slayer+=/rampage,if=rage>=120|talent.reckless_abandon&buff.recklessness.up&buff.slaughtering_strikes.stack>=3
-      spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 120 || (this.hasTalent("Reckless Abandon") && me.hasAuraByMe("Recklessness") && me.getAuraStacks("Slaughtering Strikes") >= 3)),
+      spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 120 || (this.hasTalent("Reckless Abandon") && me.hasAura("Recklessness") && me.getAuraStacks("Slaughtering Strikes") >= 3)),
       
       // actions.slayer+=/bloodbath,if=buff.bloodcraze.stack>=4|crit_pct_current>=85|active_enemies>2|buff.recklessness.up
-      spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 4 || this.getCritPct() >= 85 || this.getEnemiesInRange(8) > 2 || me.hasAuraByMe("Recklessness")),
+      spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 4 || this.getCritPct() >= 85 || this.getEnemiesInRange(8) > 2 || me.hasAura("Recklessness")),
       
       // actions.slayer+=/crushing_blow
       spell.cast("Crushing Blow", on => this.getCurrentTarget()),
@@ -519,7 +520,7 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Bloodbath", on => this.getCurrentTarget()),
       
       // actions.slayer+=/raging_blow,if=buff.opportunist.up
-      spell.cast("Raging Blow", on => this.getCurrentTarget(), req => me.hasAuraByMe("Opportunist")),
+      spell.cast("Raging Blow", on => this.getCurrentTarget(), req => me.hasAura("Opportunist")),
       
       // actions.slayer+=/bloodthirst,if=(target.health.pct<35&talent.vicious_contempt&buff.bloodcraze.stack>=2)|active_enemies>2
       spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => (this.getCurrentTarget().pctHealth < 35 && this.hasTalent("Vicious Contempt") && me.getAuraStacks(393951) >= 2) || this.getEnemiesInRange(8) > 2),
@@ -528,10 +529,10 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Rend", on => this.getCurrentTarget(), req => spell.isSpellKnown("Rend") && (!this.getCurrentTarget().hasAuraByMe("Rend") || this.getDebuffRemainingTime("Rend") < 6000)),
 
       // actions.slayer+=/rampage,if=rage>=100&talent.anger_management&buff.recklessness.up
-      spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 100 && this.hasTalent("Anger Management") && me.hasAuraByMe("Recklessness")),
+      spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 100 && this.hasTalent("Anger Management") && me.hasAura("Recklessness")),
       
       // actions.slayer+=/bloodthirst,if=buff.bloodcraze.stack>=4|crit_pct_current>=85|buff.recklessness.up
-      spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 4 || this.getCritPct() >= 85 || me.hasAuraByMe("Recklessness")),
+      spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 4 || this.getCritPct() >= 85 || me.hasAura("Recklessness")),
       
       // actions.slayer+=/raging_blow
       spell.cast("Raging Blow", on => this.getCurrentTarget()),
@@ -555,7 +556,7 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Slam", on => this.getCurrentTarget(), req => !this.hasTalent("Improved Whirlwind")),
       
       // actions.slayer+=/storm_bolt,if=buff.bladestorm.up
-      spell.cast("Storm Bolt", on => this.getCurrentTarget(), req => me.hasAuraByMe("Bladestorm"))
+      spell.cast("Storm Bolt", on => this.getCurrentTarget(), req => me.hasAura("Bladestorm"))
     );
   }
 
@@ -571,18 +572,18 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Avatar", req => Settings.UseAvatar && this.overlayToggles.avatar.value && this.shouldUseAvatar() && this.shouldUseBurstAbility()),
 
       // During burst windows, Bloodbath is a high-value press
-      spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.hasAuraByMe("Recklessness") || me.hasAuraByMe("Avatar")),
+      spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.hasAura("Recklessness") || me.hasAura("Avatar")),
       
       // Rampage over 100 rage, if Enrage missing, or Enrage about to expire
       spell.cast("Rampage", on => this.getCurrentTarget(), req =>
         me.powerByType(PowerType.Rage) >= 100 ||
-        !me.hasAuraByMe(auras.enrage) ||
+        !me.hasAura(auras.enrage) ||
         this.getAuraRemainingTime(auras.enrage) <= 1500
       ),
       
       // Thunder Blast proc aura: prioritize 2 stacks, or 1 stack during Avatar
-      spell.cast("Thunder Blast", req => me.getAuraStacks(auras.thunderBlast) >= 2 || (me.getAuraStacks(auras.thunderBlast) >= 1 && me.hasAuraByMe("Avatar")), on => this.getCurrentTarget()),
-      spell.cast("Thunder Clap", req => me.getAuraStacks(auras.thunderBlast) >= 2 || (me.getAuraStacks(auras.thunderBlast) >= 1 && me.hasAuraByMe("Avatar")), on => this.getCurrentTarget()),
+      spell.cast("Thunder Blast", req => me.getAuraStacks(auras.thunderBlast) >= 2 || (me.getAuraStacks(auras.thunderBlast) >= 1 && me.hasAura("Avatar")), on => this.getCurrentTarget()),
+      spell.cast("Thunder Clap", req => me.getAuraStacks(auras.thunderBlast) >= 2 || (me.getAuraStacks(auras.thunderBlast) >= 1 && me.hasAura("Avatar")), on => this.getCurrentTarget()),
       
       // AoE upkeep: Thunder Clap if Whirlwind buff is missing, or 6+ targets
       spell.cast("Thunder Clap", on => this.getCurrentTarget(), req =>
@@ -591,14 +592,14 @@ export class JmrSimcFuryBehavior extends Behavior {
       ),
       
       // actions.thane+=/champions_spear,if=buff.enrage.up
-      spell.cast("Champion's Spear", on => this.getCurrentTarget(), req => this.shouldUseChampionsSpear() && me.hasAuraByMe(auras.enrage) && this.shouldUseBurstAbility()),
+      spell.cast("Champion's Spear", on => this.getCurrentTarget(), req => this.shouldUseChampionsSpear() && me.hasAura(auras.enrage) && this.shouldUseBurstAbility()),
 
       // Keep Execute visible in normal Thane flow (procs + execute phase)
-      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAuraByMe(auras.suddenDeath) || this.isExecutePhase()),
+      spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) || this.isExecutePhase()),
 
       // Thunder Blast proc aura: any remaining proc is still high value
-      spell.cast("Thunder Blast", req => me.hasAuraByMe(auras.thunderBlast), on => this.getCurrentTarget()),
-      spell.cast("Thunder Clap", req => me.hasAuraByMe(auras.thunderBlast), on => this.getCurrentTarget()),
+      spell.cast("Thunder Blast", req => me.hasAura(auras.thunderBlast), on => this.getCurrentTarget()),
+      spell.cast("Thunder Clap", req => me.hasAura(auras.thunderBlast), on => this.getCurrentTarget()),
 
       // Bloodthirst now has high Midnight priority
       spell.cast("Bloodthirst", on => this.getCurrentTarget()),
@@ -619,13 +620,13 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Rampage", on => this.getCurrentTarget(), req => this.hasTalent("Bladestorm") && spell.getCooldown("Bladestorm").timeleft <= 1.5 && !this.getCurrentTarget().hasAuraByMe("Champion's Might")),
       
       // actions.thane+=/bladestorm,if=buff.enrage.up&talent.unhinged
-      spell.cast("Bladestorm", on => this.getCurrentTarget(), req => me.hasAuraByMe(auras.enrage) && this.hasTalent("Unhinged")),
+      spell.cast("Bladestorm", on => this.getCurrentTarget(), req => me.hasAura(auras.enrage) && this.hasTalent("Unhinged")),
       
       // actions.thane+=/bloodbath,if=buff.bloodcraze.stack>=2
       spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 2),
       
       // actions.thane+=/rampage,if=rage>=115&talent.reckless_abandon&buff.recklessness.up&buff.slaughtering_strikes.stack>=3
-      spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 115 && this.hasTalent("Reckless Abandon") && me.hasAuraByMe("Recklessness") && me.getAuraStacks("Slaughtering Strikes") >= 3),
+      spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 115 && this.hasTalent("Reckless Abandon") && me.hasAura("Recklessness") && me.getAuraStacks("Slaughtering Strikes") >= 3),
       
       // actions.thane+=/crushing_blow
       spell.cast("Crushing Blow", on => this.getCurrentTarget()),
@@ -666,7 +667,7 @@ export class JmrSimcFuryBehavior extends Behavior {
     return new bt.Selector(
       spell.cast("Lights Judgment", on => this.getCurrentTarget(), req => this.shouldUseOnGCDRacials()),
       spell.cast("Bag of Tricks", on => this.getCurrentTarget(), req => this.shouldUseOnGCDRacials()),
-      spell.cast("Berserking", on => this.getCurrentTarget(), req => me.hasAuraByMe("Recklessness")),
+      spell.cast("Berserking", on => this.getCurrentTarget(), req => me.hasAura("Recklessness")),
       spell.cast("Blood Fury", on => this.getCurrentTarget(), req => !Settings.BurstIncludeBloodFury || this.shouldUseBurstAbility()),
       spell.cast("Fireblood", on => this.getCurrentTarget()),
       spell.cast("Ancestral Call", on => this.getCurrentTarget())
@@ -763,13 +764,13 @@ export class JmrSimcFuryBehavior extends Behavior {
     
     const timeToDeathOk = Settings.IgnoreTimeToDeath || target.timeToDeath() > Settings.MinTimeToDeath;
     
-    return !me.hasAuraByMe("Recklessness") &&
+    return !me.hasAura("Recklessness") &&
            timeToDeathOk && !me.hasVisibleAura("Smothering Shadows") &&
-           !me.hasAuraByMe("Avatar") &&
+           !me.hasAura("Avatar") &&
            me.powerByType(PowerType.Rage) < 80 &&
-           !me.hasAuraByMe("Bloodbath") &&
-           !me.hasAuraByMe("Crushing Blow") &&
-           !me.hasAuraByMe(auras.suddenDeath) &&
+           !me.hasAura("Bloodbath") &&
+           !me.hasAura("Crushing Blow") &&
+           !me.hasAura(auras.suddenDeath) &&
            !spell.getCooldown("Bladestorm").ready &&
            (!spell.getCooldown("Execute").ready || !this.isExecutePhase());
   }
@@ -854,8 +855,8 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Battle Shout", () => this.shouldCastBattleShoutPVP()),
       
       // Defensive stance if below health threshold
-      spell.cast("Defensive Stance", () => me.pctHealth < Settings.DefensiveStanceHealthPct && !me.hasAuraByMe("Defensive Stance")),
-      spell.cast("Berserker Stance", () => me.pctHealth >= Settings.DefensiveStanceHealthPct && !me.hasAuraByMe("Berserker Stance")),
+      spell.cast("Defensive Stance", () => me.pctHealth < Settings.DefensiveStanceHealthPct && !me.hasAura("Defensive Stance")),
+      spell.cast("Berserker Stance", () => me.pctHealth >= Settings.DefensiveStanceHealthPct && !me.hasAura("Berserker Stance")),
       
       // Shattering Throw for Ice Block/Divine Shield
       spell.cast("Shattering Throw", on => this.findShatteringThrowTarget(), req => this.findShatteringThrowTarget() !== null),
@@ -933,10 +934,10 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Avatar", req => Settings.UseAvatar && this.overlayToggles.avatar.value && this.shouldUseBurstAbility()),
       
       // Execute if Sudden Death is up
-      spell.cast("Execute", on => this.getCurrentTargetPVP(), req => me.hasAuraByMe(auras.suddenDeath)),
+      spell.cast("Execute", on => this.getCurrentTargetPVP(), req => me.hasAura(auras.suddenDeath)),
       
       // Rampage if no enrage or rage capped
-      spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAuraByMe(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
+      spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAura(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
       
       // Bladestorm
       spell.cast("Bladestorm", on => this.getCurrentTargetPVP()),
@@ -949,7 +950,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   buildPVPRegularPriority() {
     return new bt.Selector(
       // Rampage if no enrage or rage capped
-      spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAuraByMe(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
+      spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAura(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
       
       // Execute if Slayer's Dominance at 3 stacks
       spell.cast("Execute", on => this.getCurrentTargetPVP(), req => this.getCurrentTargetPVP()?.getAuraStacks("Marked for Execution") === 3),
@@ -974,7 +975,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   buildPVPDefensives() {
     return new bt.Selector(
       // Battle Shout
-      spell.cast("Battle Shout", () => !me.hasVisibleAura("Battle Shout")),
+      spell.cast("Battle Shout", () => !me.hasAura(auras.battleShout)),
       
       // Defensive abilities with user options
       spell.cast("Rallying Cry", () => 
@@ -996,7 +997,7 @@ export class JmrSimcFuryBehavior extends Behavior {
         Settings.UseBloodthirstHealing && 
         this.overlayToggles.defensives.value &&
         me.pctHealth < Settings.BloodthirstHealingHealthPct && 
-        me.hasAuraByMe("Enraged Regeneration")
+        me.hasAura("Enraged Regeneration")
       )
       // Note: Pummel and Storm Bolt interrupts are NOT included here for PVP
     );
@@ -1007,7 +1008,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   shouldCastBattleShoutPVP() {
     const friends = me.getFriends();
     for (const friend of friends) {
-      if (!friend.deadOrGhost && !friend.hasAura("Battle Shout")) {
+      if (!friend.deadOrGhost && !friend.hasAura(auras.battleShout)) {
         return true;
       }
     }
