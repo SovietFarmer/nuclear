@@ -25,7 +25,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   context = BehaviorContext.Any;
   specialization = Specialization.Warrior.Fury;
   version = 1;
-  
+
   // Runtime toggles for overlay (independent of settings)
   overlayToggles = {
     showOverlay: new imgui.MutableVariable(false),
@@ -39,7 +39,7 @@ export class JmrSimcFuryBehavior extends Behavior {
 
   // Burst toggle system
   burstToggleTime = 0;
-  
+
   constructor() {
     super();
     // Initialize the burst toggle keybinding with default
@@ -50,10 +50,10 @@ export class JmrSimcFuryBehavior extends Behavior {
       console.info("[JmrSimcFury] PvP rotation auto-disabled on load (default PvE).");
     }
   }
-  
+
   // Manual spell casting
   spellIdInput = new imgui.MutableVariable("1161");
-  
+
   static settings = [
     {
       header: "PVP Settings",
@@ -85,7 +85,7 @@ export class JmrSimcFuryBehavior extends Behavior {
       ]
     },
     {
-      header: "Major Cooldowns", 
+      header: "Major Cooldowns",
       options: [
         { type: "checkbox", uid: "UseRecklessness", text: "Use Recklessness", default: true },
         { type: "checkbox", uid: "UseAvatar", text: "Use Avatar", default: true }
@@ -109,11 +109,11 @@ export class JmrSimcFuryBehavior extends Behavior {
     }
   ];
 
-  build() {    
+  build() {
     return new bt.Selector(
       new bt.Action(() => {
         this.renderOverlay();
-        
+
         const target = this.getCurrentTarget();
 
         if (imgui.isKeyPressed(imgui.Key.RightArrow)) {
@@ -132,10 +132,10 @@ export class JmrSimcFuryBehavior extends Behavior {
 
         // Handle burst toggle system
         this.handleBurstToggle();
-        
+
         return bt.Status.Failure; // Always continue to the rest of the rotation
       }),
-      
+
       common.waitForNotMounted(),
       new bt.Action(() => {
         if (this.getCurrentTarget() === null) {
@@ -144,14 +144,14 @@ export class JmrSimcFuryBehavior extends Behavior {
         return bt.Status.Failure;
       }),
       common.waitForCastOrChannel(),
-      
+
       // PVP rotation takes priority if enabled
       new bt.Decorator(
         () => Settings.EnablePVPRotation,
         this.buildPVPRotation(),
         new bt.Action(() => bt.Status.Success)
       ),
-      
+
       // Standard rotation if PVP is disabled
       new bt.Decorator(
         () => !Settings.EnablePVPRotation,
@@ -199,7 +199,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   renderOverlay() {
     // Safety check
     if (!me) return;
-    
+
     if (!this.overlayToggles.showOverlay.value) {
       return;
     }
@@ -208,60 +208,60 @@ export class JmrSimcFuryBehavior extends Behavior {
     if (!viewport) {
       return;
     }
-    
+
     const workPos = viewport.workPos;
     const workSize = viewport.workSize;
-    
+
     // Position overlay in top-right corner
     const overlaySize = { x: 250, y: 220 };
-    const overlayPos = { 
-      x: workPos.x + workSize.x - overlaySize.x - 20, 
-      y: workPos.y + 20 
+    const overlayPos = {
+      x: workPos.x + workSize.x - overlaySize.x - 20,
+      y: workPos.y + 20
     };
 
     imgui.setNextWindowPos(overlayPos, imgui.Cond.FirstUseEver);
     imgui.setNextWindowSize(overlaySize, imgui.Cond.FirstUseEver);
-    
+
     // Make background more opaque
     imgui.setNextWindowBgAlpha(0.30);
-    
+
     // Window flags for overlay behavior
-    const windowFlags = 
+    const windowFlags =
       imgui.WindowFlags.NoResize |
       imgui.WindowFlags.AlwaysAutoResize;
 
     if (imgui.begin("Fury Warrior Controls", this.overlayToggles.showOverlay, windowFlags)) {
-      
+
       // Major Cooldowns section - collapsible
       if (imgui.collapsingHeader("Major Cooldowns", imgui.TreeNodeFlags.DefaultOpen)) {
         imgui.indent();
-        
+
         // Recklessness toggle
-        const reckColor = this.overlayToggles.recklessness.value ? 
+        const reckColor = this.overlayToggles.recklessness.value ?
           { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 1.0, g: 0.2, b: 0.2, a: 1.0 };
         imgui.pushStyleColor(imgui.Col.Text, reckColor);
         imgui.checkbox("Recklessness", this.overlayToggles.recklessness);
         imgui.popStyleColor();
-        
-        // Avatar toggle  
+
+        // Avatar toggle
         const avatarColor = this.overlayToggles.avatar.value ?
           { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 1.0, g: 0.2, b: 0.2, a: 1.0 };
         imgui.pushStyleColor(imgui.Col.Text, avatarColor);
         imgui.checkbox("Avatar", this.overlayToggles.avatar);
         imgui.popStyleColor();
-        
+
         imgui.unindent();
       }
-      
+
       // Manual spell casting section - collapsible
       if (imgui.collapsingHeader("Manual Spell Casting")) {
         imgui.indent();
-        
+
         imgui.text("Spell ID:");
         imgui.sameLine();
         imgui.setNextItemWidth(80);
         imgui.inputText("##spellId", this.spellIdInput);
-        
+
         // Show spell name for current ID
         const currentSpellId = parseInt(this.spellIdInput.value, 10);
         if (currentSpellId > 0) {
@@ -273,88 +273,88 @@ export class JmrSimcFuryBehavior extends Behavior {
             imgui.textColored({ r: 1.0, g: 0.2, b: 0.2, a: 1.0 }, "Invalid Spell ID");
           }
         }
-        
+
         imgui.text("Press RightArrow to cast");
-        
+
         imgui.unindent();
       }
-      
+
       // Interrupts section - collapsible
       if (imgui.collapsingHeader("Interrupts", imgui.TreeNodeFlags.DefaultOpen)) {
         imgui.indent();
-        
+
         // Interrupts master toggle
         const interruptColor = this.overlayToggles.interrupts.value ?
           { r: 0.2, g: 1.0, b: 0.2, a: 1.0 } : { r: 1.0, g: 0.2, b: 0.2, a: 1.0 };
         imgui.pushStyleColor(imgui.Col.Text, interruptColor);
         imgui.checkbox("Interrupts", this.overlayToggles.interrupts);
         imgui.popStyleColor();
-        
+
         // Individual interrupt toggles (indented)
         if (this.overlayToggles.interrupts.value) {
           imgui.indent();
-          
+
           const pummelColor = this.overlayToggles.pummel.value ?
             { r: 0.2, g: 0.8, b: 1.0, a: 1.0 } : { r: 0.6, g: 0.6, b: 0.6, a: 1.0 };
           imgui.pushStyleColor(imgui.Col.Text, pummelColor);
           imgui.checkbox("Pummel", this.overlayToggles.pummel);
           imgui.popStyleColor();
-          
+
           const stormBoltColor = this.overlayToggles.stormBolt.value ?
             { r: 0.2, g: 0.8, b: 1.0, a: 1.0 } : { r: 0.6, g: 0.6, b: 0.6, a: 1.0 };
           imgui.pushStyleColor(imgui.Col.Text, stormBoltColor);
           imgui.checkbox("Storm Bolt", this.overlayToggles.stormBolt);
           imgui.popStyleColor();
-          
+
           imgui.unindent();
         }
-        
+
         imgui.unindent();
       }
 
       // PVP Status section - always visible
       imgui.spacing();
       imgui.separator();
-      
+
       // PVP Mode indicator
       if (Settings.EnablePVPRotation) {
         imgui.textColored({ r: 0.2, g: 1.0, b: 0.2, a: 1.0 }, "PVP MODE ACTIVE");
-        
+
         // Show active PVP features
         const shatterTarget = this.findShatteringThrowTarget();
         if (shatterTarget) {
           imgui.textColored({ r: 1.0, g: 0.0, b: 0.0, a: 1.0 }, `Shattering Throw: ${shatterTarget.unsafeName}`);
         }
-        
+
         const pummelTarget = this.findPummelTarget();
         if (pummelTarget) {
           imgui.textColored({ r: 1.0, g: 0.8, b: 0.2, a: 1.0 }, `Pummel Ready: ${pummelTarget.unsafeName}`);
         }
-        
+
         if (this.shouldSpellReflectPVP()) {
           imgui.textColored({ r: 0.8, g: 0.2, b: 1.0, a: 1.0 }, "Spell Reflect Ready!");
         }
-        
 
-        
+
+
         // Show if current target has Blessing of Freedom
         const currentTarget = this.getCurrentTargetPVP();
         if (currentTarget && currentTarget.hasAura(1044)) {
           imgui.textColored({ r: 1.0, g: 1.0, b: 0.2, a: 1.0 }, `${currentTarget.unsafeName} has Freedom`);
         }
-        
+
         // Show priority CC targets with cooldown info
         const priorityTarget = this.findEnhancedCCTarget();
         if (priorityTarget) {
           imgui.textColored({ r: 1.0, g: 0.2, b: 0.2, a: 1.0 }, `Priority CC: ${priorityTarget.name} (${priorityTarget.reason})`);
         }
-        
+
         // Show immunity targets
         const immuneTarget = this.findImmuneTarget();
         if (immuneTarget) {
           imgui.textColored({ r: 0.6, g: 0.6, b: 0.6, a: 1.0 }, `Immune: ${immuneTarget.unsafeName}`);
         }
-        
+
         // Show burst mode status (global burst toggle only)
         if (combat.burstToggle) {
           const statusText = Settings.BurstModeWindow ?
@@ -380,9 +380,9 @@ export class JmrSimcFuryBehavior extends Behavior {
       } else {
         imgui.textColored({ r: 0.6, g: 0.6, b: 0.6, a: 1.0 }, "PVE Mode");
       }
-      
+
       imgui.spacing();
-      
+
       // Quick controls
       if (imgui.button("Enable All", { x: 100, y: 0 })) {
         this.overlayToggles.interrupts.value = true;
@@ -392,9 +392,9 @@ export class JmrSimcFuryBehavior extends Behavior {
         this.overlayToggles.pummel.value = true;
         this.overlayToggles.stormBolt.value = true;
       }
-      
+
       imgui.sameLine();
-      
+
       if (imgui.button("Disable All", { x: 100, y: 0 })) {
         this.overlayToggles.interrupts.value = false;
         this.overlayToggles.defensives.value = false;
@@ -403,7 +403,7 @@ export class JmrSimcFuryBehavior extends Behavior {
         this.overlayToggles.pummel.value = false;
         this.overlayToggles.stormBolt.value = false;
       }
-      
+
       imgui.end();
     }
   }
@@ -455,106 +455,106 @@ export class JmrSimcFuryBehavior extends Behavior {
         !me.hasAura(auras.enrage) ||
         this.getAuraRemainingTime(auras.enrage) <= 1500
       ),
-      
+
       // actions.slayer+=/execute,if=buff.ashen_juggernaut.up&buff.ashen_juggernaut.remains<=gcd
       spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura("Ashen Juggernaut") && this.getAuraRemainingTime("Ashen Juggernaut") <= 1.5),
-      
+
       // actions.slayer+=/champions_spear,if=buff.enrage.up&(cooldown.bladestorm.remains>=2|cooldown.bladestorm.remains>=16&debuff.marked_for_execution.stack=3)
       spell.cast("Champion's Spear", on => this.getCurrentTarget(), req => this.shouldUseChampionsSpear() && me.hasAura(auras.enrage) && (spell.getCooldown("Bladestorm").timeleft >= 2 || (spell.getCooldown("Bladestorm").timeleft >= 16 && this.getCurrentTarget().getAuraStacks("Marked for Execution") === 3))),
-      
+
       // actions.slayer+=/ravager,if=buff.enrage.up (guarded for Midnight)
       spell.cast("Ravager", on => this.getCurrentTarget(), req => spell.isSpellKnown("Ravager") && me.hasAura(auras.enrage) && this.shouldUseBurstAbility()),
-      
+
       // actions.slayer+=/bladestorm,if=buff.enrage.up&(talent.reckless_abandon&cooldown.avatar.remains>=24|talent.anger_management&cooldown.recklessness.remains>=18)
       spell.cast("Bladestorm", on => this.getCurrentTarget(), req => me.hasAura(auras.enrage) && ((this.hasTalent("Reckless Abandon") && spell.getCooldown("Avatar").timeleft >= 24) || (this.hasTalent("Anger Management") && spell.getCooldown("Recklessness").timeleft >= 18))),
-      
+
       // actions.slayer+=/odyns_fury,if=(buff.enrage.up|talent.titanic_rage)&cooldown.avatar.remains
       spell.cast("Odyn's Fury", on => this.getCurrentTarget(), req => this.shouldUseOdynsFury() && (me.hasAura(auras.enrage) || this.hasTalent("Titanic Rage")) && spell.getCooldown("Avatar").timeleft > 0),
 
       // Midnight: prioritize Execute on Sudden Death procs and in execute phase
       spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) || this.isExecutePhase()),
-      
+
       // actions.slayer+=/whirlwind,if=active_enemies>=2&talent.meat_cleaver&buff.meat_cleaver.stack=0
       spell.cast("Whirlwind", on => this.getCurrentTarget(), req => this.getEnemiesInRange(8) >= 2 && this.hasTalent("Meat Cleaver") && me.getAuraStacks(auras.whirlwind) === 0),
-      
+
       // actions.slayer+=/execute,if=buff.sudden_death.stack=2&buff.sudden_death.remains<7
       spell.cast("Execute", on => this.getCurrentTarget(), req => me.getAuraStacks(auras.suddenDeath) === 2 && this.getAuraRemainingTime(auras.suddenDeath) < 7000),
-      
+
       // actions.slayer+=/execute,if=buff.sudden_death.up&buff.sudden_death.remains<2
       spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) && this.getAuraRemainingTime(auras.suddenDeath) < 2000),
-      
+
       // actions.slayer+=/execute,if=buff.sudden_death.up&buff.imminent_demise.stack<3&cooldown.bladestorm.remains<25
       spell.cast("Execute", on => this.getCurrentTarget(), req => me.hasAura(auras.suddenDeath) && me.getAuraStacks("Imminent Demise") < 3 && spell.getCooldown("Bladestorm").timeleft < 25),
-      
+
       // actions.slayer+=/rampage,if=!buff.enrage.up|buff.slaughtering_strikes.stack>=4
       spell.cast("Rampage", on => this.getCurrentTarget(), req => !me.hasAura(auras.enrage) || me.getAuraStacks("Slaughtering Strikes") >= 4),
-      
+
       // actions.slayer+=/crushing_blow,if=action.raging_blow.charges=2|buff.brutal_finish.up&(!debuff.champions_might.up|debuff.champions_might.up&debuff.champions_might.remains>gcd)
       spell.cast("Crushing Blow", on => this.getCurrentTarget(), req => spell.getCharges("Raging Blow") === 2 || (me.hasAura("Brutal Finish") && (!this.getCurrentTarget().hasAuraByMe("Champion's Might") || (this.getCurrentTarget().hasAuraByMe("Champion's Might") && this.getDebuffRemainingTime("Champion's Might") > 1.5)))),
-      
+
       // actions.slayer+=/execute,if=debuff.marked_for_execution.stack=3
       spell.cast("Execute", on => this.getCurrentTarget(), req => this.getCurrentTarget().getAuraStacks("Marked for Execution") === 3),
-      
+
       // actions.slayer+=/bloodbath,if=buff.bloodcraze.stack>=1|(talent.uproar&dot.bloodbath_dot.remains<40&talent.bloodborne)|buff.enrage.up&buff.enrage.remains<gcd
       spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 1 || (this.hasTalent("Uproar") && this.getDebuffRemainingTime("Bloodbath") < 40 && this.hasTalent("Bloodborne")) || (me.hasAura(auras.enrage) && this.getAuraRemainingTime(auras.enrage) < 1500)),
-      
+
       // actions.slayer+=/raging_blow,if=buff.brutal_finish.up&buff.slaughtering_strikes.stack<5&(!debuff.champions_might.up|debuff.champions_might.up&debuff.champions_might.remains>gcd)
       spell.cast("Raging Blow", on => this.getCurrentTarget(), req => me.hasAura("Brutal Finish") && me.getAuraStacks("Slaughtering Strikes") < 5 && (!this.getCurrentTarget().hasAuraByMe("Champion's Might") || (this.getCurrentTarget().hasAuraByMe("Champion's Might") && this.getDebuffRemainingTime("Champion's Might") > 1.5))),
-      
+
       // actions.slayer+=/bloodthirst,if=active_enemies>3
       spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => this.getEnemiesInRange(8) > 3),
-      
+
       // actions.slayer+=/rampage,if=action.raging_blow.charges<=1&rage>=100&talent.anger_management&buff.recklessness.down
       spell.cast("Rampage", on => this.getCurrentTarget(), req => spell.getCharges("Raging Blow") <= 1 && me.powerByType(PowerType.Rage) >= 100 && this.hasTalent("Anger Management") && !me.hasAura("Recklessness")),
-      
+
       // actions.slayer+=/rampage,if=rage>=120|talent.reckless_abandon&buff.recklessness.up&buff.slaughtering_strikes.stack>=3
       spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 120 || (this.hasTalent("Reckless Abandon") && me.hasAura("Recklessness") && me.getAuraStacks("Slaughtering Strikes") >= 3)),
-      
+
       // actions.slayer+=/bloodbath,if=buff.bloodcraze.stack>=4|crit_pct_current>=85|active_enemies>2|buff.recklessness.up
       spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 4 || this.getCritPct() >= 85 || this.getEnemiesInRange(8) > 2 || me.hasAura("Recklessness")),
-      
+
       // actions.slayer+=/crushing_blow
       spell.cast("Crushing Blow", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/bloodbath
       spell.cast("Bloodbath", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/raging_blow,if=buff.opportunist.up
       spell.cast("Raging Blow", on => this.getCurrentTarget(), req => me.hasAura("Opportunist")),
-      
+
       // actions.slayer+=/bloodthirst,if=(target.health.pct<35&talent.vicious_contempt&buff.bloodcraze.stack>=2)|active_enemies>2
       spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => (this.getCurrentTarget().pctHealth < 35 && this.hasTalent("Vicious Contempt") && me.getAuraStacks(393951) >= 2) || this.getEnemiesInRange(8) > 2),
-      
+
       // Midnight: refresh Rend if missing or expiring
       spell.cast("Rend", on => this.getCurrentTarget(), req => spell.isSpellKnown("Rend") && (!this.getCurrentTarget().hasAuraByMe("Rend") || this.getDebuffRemainingTime("Rend") < 6000)),
 
       // actions.slayer+=/rampage,if=rage>=100&talent.anger_management&buff.recklessness.up
       spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 100 && this.hasTalent("Anger Management") && me.hasAura("Recklessness")),
-      
+
       // actions.slayer+=/bloodthirst,if=buff.bloodcraze.stack>=4|crit_pct_current>=85|buff.recklessness.up
       spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 4 || this.getCritPct() >= 85 || me.hasAura("Recklessness")),
-      
+
       // actions.slayer+=/raging_blow
       spell.cast("Raging Blow", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/wrecking_throw
       spell.cast("Wrecking Throw", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/bloodthirst
       spell.cast("Bloodthirst", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/rampage
       spell.cast("Rampage", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/execute
       spell.cast("Execute", on => this.getCurrentTarget()),
-      
+
       // actions.slayer+=/whirlwind,if=talent.improved_whirlwind
       spell.cast("Whirlwind", on => this.getCurrentTarget(), req => this.hasTalent("Improved Whirlwind")),
-      
+
       // actions.slayer+=/slam,if=!talent.improved_whirlwind
       spell.cast("Slam", on => this.getCurrentTarget(), req => !this.hasTalent("Improved Whirlwind")),
-      
+
       // actions.slayer+=/storm_bolt,if=buff.bladestorm.up
       spell.cast("Storm Bolt", on => this.getCurrentTarget(), req => me.hasAura("Bladestorm"))
     );
@@ -567,30 +567,30 @@ export class JmrSimcFuryBehavior extends Behavior {
 
       // actions.thane=recklessness
       spell.cast("Recklessness", req => Settings.UseRecklessness && this.overlayToggles.recklessness.value && this.shouldUseRecklessness() && this.shouldUseBurstAbility()),
-      
+
       // actions.thane+=/avatar
       spell.cast("Avatar", req => Settings.UseAvatar && this.overlayToggles.avatar.value && this.shouldUseAvatar() && this.shouldUseBurstAbility()),
 
       // During burst windows, Bloodbath is a high-value press
       spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.hasAura("Recklessness") || me.hasAura("Avatar")),
-      
+
       // Rampage over 100 rage, if Enrage missing, or Enrage about to expire
       spell.cast("Rampage", on => this.getCurrentTarget(), req =>
         me.powerByType(PowerType.Rage) >= 100 ||
         !me.hasAura(auras.enrage) ||
         this.getAuraRemainingTime(auras.enrage) <= 1500
       ),
-      
+
       // Thunder Blast proc aura: prioritize 2 stacks, or 1 stack during Avatar
       spell.cast("Thunder Blast", req => me.getAuraStacks(auras.thunderBlast) >= 2 || (me.getAuraStacks(auras.thunderBlast) >= 1 && me.hasAura("Avatar")), on => this.getCurrentTarget()),
       spell.cast("Thunder Clap", req => me.getAuraStacks(auras.thunderBlast) >= 2 || (me.getAuraStacks(auras.thunderBlast) >= 1 && me.hasAura("Avatar")), on => this.getCurrentTarget()),
-      
+
       // AoE upkeep: Thunder Clap if Whirlwind buff is missing, or 6+ targets
       spell.cast("Thunder Clap", on => this.getCurrentTarget(), req =>
         (this.getEnemiesInRange(8) >= 3) ||
         (this.hasTalent("Meat Cleaver") && this.getEnemiesInRange(8) >= 2 && me.getAuraStacks(auras.whirlwind) === 0)
       ),
-      
+
       // actions.thane+=/champions_spear,if=buff.enrage.up
       spell.cast("Champion's Spear", on => this.getCurrentTarget(), req => this.shouldUseChampionsSpear() && me.hasAura(auras.enrage) && this.shouldUseBurstAbility()),
 
@@ -606,7 +606,7 @@ export class JmrSimcFuryBehavior extends Behavior {
 
       // Dump rage to avoid capping even while Enraged
       spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 100),
-      
+
       // actions.thane+=/execute,if=talent.ashen_juggernaut
       spell.cast("Execute", on => this.getCurrentTarget(), req => this.hasTalent("Ashen Juggernaut")),
 
@@ -615,43 +615,43 @@ export class JmrSimcFuryBehavior extends Behavior {
 
       // actions.thane+=/execute,if=talent.ashen_juggernaut&buff.ashen_juggernaut.remains<=gcd
       spell.cast("Execute", on => this.getCurrentTarget(), req => this.hasTalent("Ashen Juggernaut") && this.getAuraRemainingTime("Ashen Juggernaut") <= 1.5),
-      
+
       // actions.thane+=/rampage,if=talent.bladestorm&cooldown.bladestorm.remains<=gcd&!debuff.champions_might.up
       spell.cast("Rampage", on => this.getCurrentTarget(), req => this.hasTalent("Bladestorm") && spell.getCooldown("Bladestorm").timeleft <= 1.5 && !this.getCurrentTarget().hasAuraByMe("Champion's Might")),
-      
+
       // actions.thane+=/bladestorm,if=buff.enrage.up&talent.unhinged
       spell.cast("Bladestorm", on => this.getCurrentTarget(), req => me.hasAura(auras.enrage) && this.hasTalent("Unhinged")),
-      
+
       // actions.thane+=/bloodbath,if=buff.bloodcraze.stack>=2
       spell.cast("Bloodbath", on => this.getCurrentTarget(), req => me.getAuraStacks(393951) >= 2),
-      
+
       // actions.thane+=/rampage,if=rage>=115&talent.reckless_abandon&buff.recklessness.up&buff.slaughtering_strikes.stack>=3
       spell.cast("Rampage", on => this.getCurrentTarget(), req => me.powerByType(PowerType.Rage) >= 115 && this.hasTalent("Reckless Abandon") && me.hasAura("Recklessness") && me.getAuraStacks("Slaughtering Strikes") >= 3),
-      
+
       // actions.thane+=/crushing_blow
       spell.cast("Crushing Blow", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/bloodbath
       spell.cast("Bloodbath", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/rampage
       spell.cast("Rampage", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/bloodthirst,if=talent.vicious_contempt&target.health.pct<35&buff.bloodcraze.stack>=2|buff.bloodcraze.stack>=3|active_enemies>=6
       spell.cast("Bloodthirst", on => this.getCurrentTarget(), req => (this.hasTalent("Vicious Contempt") && this.getCurrentTarget().pctHealth < 35 && me.getAuraStacks(393951) >= 2) || me.getAuraStacks(393951) >= 3 || this.getEnemiesInRange(8) >= 6),
-      
+
       // actions.thane+=/raging_blow
       spell.cast("Raging Blow", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/wrecking_throw
       spell.cast("Wrecking Throw", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/bloodthirst
       spell.cast("Bloodthirst", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/execute
       spell.cast("Execute", on => this.getCurrentTarget()),
-      
+
       // actions.thane+=/thunder_clap
       spell.cast("Thunder Clap", on => this.getCurrentTarget())
     );
@@ -682,7 +682,7 @@ export class JmrSimcFuryBehavior extends Behavior {
     if (Settings.IgnoreTimeToDeath) {
       return !me.hasVisibleAura("Smothering Shadows");
     }
-    
+
     const target = this.getCurrentTarget();
     return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
@@ -695,7 +695,7 @@ export class JmrSimcFuryBehavior extends Behavior {
     if (Settings.IgnoreTimeToDeath) {
       return !me.hasVisibleAura("Smothering Shadows");
     }
-    
+
     const target = this.getCurrentTarget();
     return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
@@ -703,7 +703,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   handleBurstToggle() {
     // Check for keybind press using the KeyBinding system
     if (KeyBinding.isPressed("BurstToggleKeybind")) {
-      
+
       if (!Settings.BurstModeWindow) {
         // Toggle mode: flip the state
         combat.burstToggle = !combat.burstToggle;
@@ -715,11 +715,11 @@ export class JmrSimcFuryBehavior extends Behavior {
         console.log(`Burst window ACTIVATED for ${Settings.BurstWindowDuration} seconds`);
       }
     }
-    
+
     // Handle burst window timeout - always check if we're in window mode and burst is active
     if (Settings.BurstModeWindow && combat.burstToggle && this.burstToggleTime > 0) {
       const elapsed = (wow.frameTime - this.burstToggleTime) / 1000;
-      
+
       if (elapsed >= Settings.BurstWindowDuration) {
         combat.burstToggle = false;
         this.burstToggleTime = 0; // Reset the timer
@@ -740,7 +740,7 @@ export class JmrSimcFuryBehavior extends Behavior {
     if (Settings.IgnoreTimeToDeath) {
       return !me.hasVisibleAura("Smothering Shadows");
     }
-    
+
     const target = this.getCurrentTarget();
     return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
@@ -753,7 +753,7 @@ export class JmrSimcFuryBehavior extends Behavior {
     if (Settings.IgnoreTimeToDeath) {
       return !me.hasVisibleAura("Smothering Shadows");
     }
-    
+
     const target = this.getCurrentTarget();
     return target && target.timeToDeath() > Settings.MinTimeToDeath && !me.hasVisibleAura("Smothering Shadows");
   }
@@ -761,9 +761,9 @@ export class JmrSimcFuryBehavior extends Behavior {
   shouldUseOnGCDRacials() {
     const target = this.getCurrentTarget();
     if (!target) return false;
-    
+
     const timeToDeathOk = Settings.IgnoreTimeToDeath || target.timeToDeath() > Settings.MinTimeToDeath;
-    
+
     return !me.hasAura("Recklessness") &&
            timeToDeathOk && !me.hasVisibleAura("Smothering Shadows") &&
            !me.hasAura("Avatar") &&
@@ -836,14 +836,14 @@ export class JmrSimcFuryBehavior extends Behavior {
     return new bt.Selector(
       // Always Perform actions
       this.buildPVPAlwaysPerform(),
-      
+
       // Slayer Burst (global burst toggle)
       new bt.Decorator(
         () => this.shouldUseBurstAbility(),
         this.buildSlayerBurst(),
         new bt.Action(() => bt.Status.Success)
       ),
-      
+
       // Regular PVP Priority
       this.buildPVPRegularPriority()
     );
@@ -853,47 +853,47 @@ export class JmrSimcFuryBehavior extends Behavior {
     return new bt.Selector(
       // Battle Shout if any party member doesn't have it
       spell.cast("Battle Shout", () => this.shouldCastBattleShoutPVP()),
-      
+
       // Defensive stance if below health threshold
       spell.cast("Defensive Stance", () => me.pctHealth < Settings.DefensiveStanceHealthPct && !me.hasAura("Defensive Stance")),
       spell.cast("Berserker Stance", () => me.pctHealth >= Settings.DefensiveStanceHealthPct && !me.hasAura("Berserker Stance")),
-      
+
       // Shattering Throw for Ice Block/Divine Shield
       spell.cast("Shattering Throw", on => this.findShatteringThrowTarget(), req => this.findShatteringThrowTarget() !== null),
-      
+
       // Spell Reflect for spells in blacklist targeting us
       spell.cast(23920, () => this.shouldSpellReflectPVP()),
-      
+
       // Pummel interrupts for PVP
       spell.interrupt("Pummel", on => this.findPummelTarget(), req => this.findPummelTarget() !== null),
-      
+
       // Hamstring - use successful cast tracking from Spell.js
       spell.cast("Hamstring", () => {
         if (!Settings.UseHamstring) return false;
-        
+
         const target = this.getCurrentTargetPVP();
         if (!target) return false;
-        
+
         // Don't cast if target has movement debuffs already
         if (target.hasAura(1715) || target.hasAura(12323)) return false;
-        
+
         // Don't cast if target has immunity or slow immunity
         if (pvpHelpers.hasImmunity(target)) return false;
         if (target.hasAura(1044)) return false; // Blessing of Freedom
-        
+
         // Check timing based on ACTUAL successful casts from Spell.js
         const lastSuccessfulTime = spell._lastSuccessfulCastTimes.get("hamstring");
         const now = wow.frameTime;
         const timeSinceSuccess = lastSuccessfulTime ? now - lastSuccessfulTime : 999999;
-        
+
         // Only cast every 12 seconds after successful cast
         if (lastSuccessfulTime && timeSinceSuccess < 12000) {
           return false;
         }
-        
+
         return true;
       }),
-      
+
       // Defensive abilities (excluding pummel/storm bolt interrupts)
       this.buildPVPDefensives(),
 
@@ -908,10 +908,10 @@ export class JmrSimcFuryBehavior extends Behavior {
         ),
         new bt.Action(() => bt.Status.Success)
       ),
-      
+
       // Berserker Shout if near healer and healer is disoriented
       spell.cast("Berserker Shout", () => Settings.UseBerserkerShout && this.shouldUseBerserkerShout()),
-      
+
       // Piercing Howl if 2+ enemies in 12 yards (avoid targets with Blessing of Freedom)
       spell.cast("Piercing Howl", () => this.shouldCastPiercingHowl()),
 
@@ -924,16 +924,16 @@ export class JmrSimcFuryBehavior extends Behavior {
     return new bt.Selector(
       // CC healer with Storm Bolt
       spell.cast("Storm Bolt", on => this.findHealerForStunCC(), req => this.findHealerForStunCC() !== null),
-      
+
       // CC current target with Storm Bolt if healer has stun DR
       spell.cast("Storm Bolt", on => this.getCurrentTargetPVP(), req => this.shouldStormBoltCurrentTarget() && this.shouldUseBurstAbility()),
 
       // Shockwave setup: DR/canCC gated short AoE stun during burst windows
       spell.cast("Shockwave", on => this.findShockwaveBurstTarget(), req => spell.isSpellKnown("Shockwave") && this.findShockwaveBurstTarget() !== null),
-      
+
       // Recklessness
       spell.cast("Recklessness", req => Settings.UseRecklessness && this.overlayToggles.recklessness.value && this.shouldUseBurstAbility()),
-      
+
       // Avatar
       spell.cast("Avatar", req => Settings.UseAvatar && this.overlayToggles.avatar.value && this.shouldUseBurstAbility()),
 
@@ -942,7 +942,7 @@ export class JmrSimcFuryBehavior extends Behavior {
 
       // Champion's Spear current target
       spell.cast("Champion's Spear", on => this.getCurrentTargetPVP(), req => this.shouldUseChampionsSpear() && this.shouldUseBurstAbility()),
-      
+
       // Rampage if no enrage or rage capped
       spell.cast("Rampage", on => this.getCurrentTargetPVP(), req => !me.hasAura(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
 
@@ -959,7 +959,7 @@ export class JmrSimcFuryBehavior extends Behavior {
       spell.cast("Bloodthirst", on => this.getCurrentTargetPVP()),
       spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes")),
       spell.cast("Whirlwind", on => this.getCurrentTargetPVP()),
-      
+
       // Continue with regular priority
       this.buildPVPRegularPriority()
     );
@@ -973,19 +973,19 @@ export class JmrSimcFuryBehavior extends Behavior {
       // Mountain Thane proc spender in sustained pressure
       spell.cast("Thunder Blast", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
       spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), req => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
-      
+
       // Execute if Sudden Death is up
       spell.cast("Execute", on => this.getCurrentTargetPVP(), req => me.hasAura(auras.suddenDeath)),
 
       // Execute if Slayer's Dominance at 3 stacks
       spell.cast("Execute", on => this.getCurrentTargetPVP(), req => this.getCurrentTargetPVP()?.getAuraStacks("Marked for Execution") === 3),
-      
+
       // Rampage
       spell.cast("Rampage", on => this.getCurrentTargetPVP()),
-      
+
       // Raging Blow
       spell.cast("Raging Blow", on => this.getCurrentTargetPVP()),
-      
+
       // Bloodthirst
       spell.cast("Bloodthirst", on => this.getCurrentTargetPVP()),
 
@@ -999,27 +999,27 @@ export class JmrSimcFuryBehavior extends Behavior {
     return new bt.Selector(
       // Battle Shout
       spell.cast("Battle Shout", () => !me.hasAura(auras.battleShout)),
-      
+
       // Defensive abilities with user options
-      spell.cast("Rallying Cry", () => 
-        Settings.UseRallyingCry && 
+      spell.cast("Rallying Cry", () =>
+        Settings.UseRallyingCry &&
         this.overlayToggles.defensives.value &&
         me.pctHealth < Settings.RallyingCryHealthPct
       ),
-      spell.cast("Victory Rush", () => 
-        Settings.UseVictoryRush && 
+      spell.cast("Victory Rush", () =>
+        Settings.UseVictoryRush &&
         this.overlayToggles.defensives.value &&
         me.effectiveHealthPercent < Settings.VictoryRushHealthPct
       ),
-      spell.cast("Enraged Regeneration", () => 
-        Settings.UseEnragedRegeneration && 
+      spell.cast("Enraged Regeneration", () =>
+        Settings.UseEnragedRegeneration &&
         this.overlayToggles.defensives.value &&
         me.pctHealth < Settings.EnragedRegenerationHealthPct
       ),
-      spell.cast("Bloodthirst", () => 
-        Settings.UseBloodthirstHealing && 
+      spell.cast("Bloodthirst", () =>
+        Settings.UseBloodthirstHealing &&
         this.overlayToggles.defensives.value &&
-        me.pctHealth < Settings.BloodthirstHealingHealthPct && 
+        me.pctHealth < Settings.BloodthirstHealingHealthPct &&
         me.hasAura("Enraged Regeneration")
       )
       // Note: Pummel and Storm Bolt interrupts are NOT included here for PVP
@@ -1059,12 +1059,12 @@ export class JmrSimcFuryBehavior extends Behavior {
 
   findPummelTarget() {
     const enemies = me.getEnemies();
-    
+
     // Priority 1: Enemy casting an interruptible spell within 8 yards
     for (const enemy of enemies) {
-      if (enemy.isCastingOrChanneling && 
-          enemy.isPlayer() && 
-          me.distanceTo(enemy) <= 8 && 
+      if (enemy.isCastingOrChanneling &&
+          enemy.isPlayer() &&
+          me.distanceTo(enemy) <= 8 &&
           me.isWithinMeleeRange(enemy)) {
         const spellInfo = enemy.spellInfo;
         if (spellInfo) {
@@ -1077,36 +1077,36 @@ export class JmrSimcFuryBehavior extends Behavior {
         }
       }
     }
-    
+
     // Priority 2: Enemy healer within 8 yards if any enemy near me is under 50% health
-    const lowHealthEnemyNearby = enemies.some(enemy => 
-      enemy.isPlayer() && 
-      me.distanceTo(enemy) <= 15 && 
+    const lowHealthEnemyNearby = enemies.some(enemy =>
+      enemy.isPlayer() &&
+      me.distanceTo(enemy) <= 15 &&
       enemy.pctHealth < 50
     );
-    
+
     if (lowHealthEnemyNearby) {
       for (const enemy of enemies) {
-        if (enemy.isCastingOrChanneling && 
-            enemy.isPlayer() && 
+        if (enemy.isCastingOrChanneling &&
+            enemy.isPlayer() &&
             enemy.isHealer() &&
-            me.distanceTo(enemy) <= 8 && 
+            me.distanceTo(enemy) <= 8 &&
             me.isWithinMeleeRange(enemy)) {
           console.log(`Pummel healer target found: ${enemy.unsafeName} (low health enemy nearby)`);
           return enemy;
         }
       }
     }
-    
+
     return null;
   }
 
   findDisarmTarget() {
     const enemies = me.getEnemies();
     for (const enemy of enemies) {
-      if (enemy.isPlayer() && 
-          me.isWithinMeleeRange(enemy) && 
-          this.isMeleeClass(enemy) && 
+      if (enemy.isPlayer() &&
+          me.isWithinMeleeRange(enemy) &&
+          this.isMeleeClass(enemy) &&
           this.hasMajorCooldowns(enemy) &&
           drTracker.getDRStacks(enemy.guid, "disarm") < 2 &&
           !pvpHelpers.hasImmunity(enemy) &&
@@ -1120,10 +1120,10 @@ export class JmrSimcFuryBehavior extends Behavior {
   findStormBoltCCTarget() {
     const enemies = me.getEnemies();
     for (const enemy of enemies) {
-      if (enemy.isPlayer() && 
-          me.distanceTo(enemy) > 7 && 
+      if (enemy.isPlayer() &&
+          me.distanceTo(enemy) > 7 &&
           me.distanceTo(enemy) <= 30 &&
-          this.isCasterClass(enemy) && 
+          this.isCasterClass(enemy) &&
           this.hasMajorCooldowns(enemy) &&
           drTracker.getDRStacks(enemy.guid, "stun") < 2 &&
           !pvpHelpers.hasImmunity(enemy) &&
@@ -1169,21 +1169,21 @@ export class JmrSimcFuryBehavior extends Behavior {
 
   findIntimidatingShoutTarget() {
     const enemies = me.getEnemies();
-    
+
     // Count eligible enemies within 8 yards (not DR'd, not immune, not already CC'd)
-    const eligibleEnemies = enemies.filter(enemy => 
-      enemy.isPlayer() && 
-      me.distanceTo(enemy) <= 8 && 
+    const eligibleEnemies = enemies.filter(enemy =>
+      enemy.isPlayer() &&
+      me.distanceTo(enemy) <= 8 &&
       drTracker.getDRStacks(enemy.guid, "disorient") < 2 &&
       !pvpHelpers.hasImmunity(enemy) &&
       !enemy.isCCd()
     );
-    
+
     // Only use Intimidating Shout if we can fear 2+ enemies
     if (eligibleEnemies.length < 2) {
       return null;
     }
-    
+
     // Prefer enemies with major cooldowns, but any eligible enemy works
     const priorityTarget = eligibleEnemies.find(enemy => this.hasMajorCooldowns(enemy));
     return priorityTarget || eligibleEnemies[0];
@@ -1192,7 +1192,7 @@ export class JmrSimcFuryBehavior extends Behavior {
   findHealerForStunCC() {
     const enemies = me.getEnemies();
     for (const enemy of enemies) {
-      if (enemy.isPlayer() && 
+      if (enemy.isPlayer() &&
           enemy.isHealer() &&
           me.distanceTo(enemy) <= 30 &&
           drTracker.getDRStacks(enemy.guid, "stun") < 2 &&
@@ -1206,21 +1206,21 @@ export class JmrSimcFuryBehavior extends Behavior {
   shouldStormBoltCurrentTarget() {
     const target = this.getCurrentTargetPVP();
     if (!target || !target.isPlayer()) return false;
-    
+
     const healer = this.findHealerForStunCC();
     const healerHasStunDR = healer && drTracker.getDRStacks(healer.guid, "stun") >= 2;
     const targetIsNotHealer = !target.isHealer();
-    
+
     return healerHasStunDR && targetIsNotHealer && drTracker.getDRStacks(target.guid, "stun") < 2;
   }
 
   shouldUseBerserkerShout() {
     if (!this.hasTalent("Berserker Shout")) return false;
-    
+
     const friends = me.getFriends();
     for (const friend of friends) {
-      if (friend.isHealer() && 
-          me.distanceTo(friend) <= 12 && 
+      if (friend.isHealer() &&
+          me.distanceTo(friend) <= 12 &&
           drTracker.isCCdByCategory(friend.guid, "disorient")) {
         return true;
       }
@@ -1253,24 +1253,24 @@ export class JmrSimcFuryBehavior extends Behavior {
     const enemies = me.getEnemies();
     for (const enemy of enemies) {
       if (!enemy.isPlayer() || me.distanceTo(enemy) > 30) continue;
-      
+
       // Check for major damage cooldowns
       const damageCooldown = pvpHelpers.hasMajorDamageCooldown(enemy, 3);
       if (damageCooldown) {
-        return { 
-          unit: enemy, 
-          name: enemy.unsafeName, 
-          reason: `${damageCooldown.name} (${damageCooldown.remainingTime.toFixed(1)}s)` 
+        return {
+          unit: enemy,
+          name: enemy.unsafeName,
+          reason: `${damageCooldown.name} (${damageCooldown.remainingTime.toFixed(1)}s)`
         };
       }
-      
+
       // Check for disarmable buffs
       const disarmableBuff = pvpHelpers.hasDisarmableBuff(enemy, false, 3);
       if (disarmableBuff) {
-        return { 
-          unit: enemy, 
-          name: enemy.unsafeName, 
-          reason: `${disarmableBuff.name} (${disarmableBuff.remainingTime.toFixed(1)}s)` 
+        return {
+          unit: enemy,
+          name: enemy.unsafeName,
+          reason: `${disarmableBuff.name} (${disarmableBuff.remainingTime.toFixed(1)}s)`
         };
       }
     }
@@ -1292,13 +1292,13 @@ export class JmrSimcFuryBehavior extends Behavior {
   shouldCastPiercingHowl() {
     // Get enemies within 12 yards
     const enemies = me.getEnemies();
-    const enemiesInRange = enemies.filter(enemy => 
-      enemy.isPlayer() && 
+    const enemiesInRange = enemies.filter(enemy =>
+      enemy.isPlayer() &&
       me.distanceTo(enemy) <= 12 &&
       !pvpHelpers.hasImmunity(enemy) &&
       !enemy.hasAura(1044) // Don't target enemies with Blessing of Freedom
     );
-    
+
     return enemiesInRange.length >= 2;
   }
 
@@ -1309,7 +1309,7 @@ export class JmrSimcFuryBehavior extends Behavior {
         // Check specifically for Ice Block (45438) or Divine Shield (642)
         const hasIceBlock = enemy.hasAura(45438);
         const hasDivineShield = enemy.hasAura(642);
-        
+
         if (hasIceBlock || hasDivineShield) {
           return enemy;
         }
