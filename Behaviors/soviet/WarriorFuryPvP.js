@@ -153,6 +153,7 @@ export class WarriorFuryPvP extends Behavior {
       spell.cast("Avatar", ret => Settings.UseAvatar && spell.isSpellKnown("Avatar") && this.shouldUseBurstAbility()),
       spell.cast("Bladestorm", on => this.getCurrentTargetPVP()),
       spell.cast("Champion's Spear", on => this.getCurrentTargetPVP(), ret => this.shouldUseChampionsSpear() && this.shouldUseBurstAbility()),
+      spell.cast("Odyn's Fury", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Odyn's Fury") && this.shouldUseOdynsFury() && this.shouldUseBurstAbility()),
       spell.cast("Rampage", on => this.getCurrentTargetPVP(), ret => !me.hasAura(auras.enrage) || me.powerByType(PowerType.Rage) >= 110),
       spell.cast("Thunder Blast", on => this.getCurrentTargetPVP(), ret => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
       spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), ret => this.hasTalent("Lightning Strikes") && me.hasAura(auras.thunderBlast)),
@@ -194,6 +195,11 @@ export class WarriorFuryPvP extends Behavior {
   }
 
   shouldUseChampionsSpear() {
+    if (!this.shouldUseBurstAbility()) return false;
+    return !me.hasAura("Smothering Shadows");
+  }
+
+  shouldUseOdynsFury() {
     if (!this.shouldUseBurstAbility()) return false;
     return !me.hasAura("Smothering Shadows");
   }
