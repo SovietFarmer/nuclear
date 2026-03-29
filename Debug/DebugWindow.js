@@ -12,6 +12,10 @@ class DebugWindow {
     this.selected = null;
     this.selectedSpell = null;
     this.toggleBindInitialized = false;
+    /** Verbose aura inspection: periodic log while Debug window is open */
+    this.auraInspectContinuous = new imgui.MutableVariable(false);
+    this.auraInspectIntervalMs = new imgui.MutableVariable(1000);
+    this._auraInspectLastLog = 0;
   }
 
   tick() {
@@ -28,7 +32,119 @@ class DebugWindow {
 
     if (this.show.value) {
       this.render(this.show);
+      if (this.auraInspectContinuous.value && me) {
+        const interval = Math.max(250, this.auraInspectIntervalMs.value | 0);
+        const now = wow.frameTime;
+        if (now - this._auraInspectLastLog >= interval) {
+          this._auraInspectLastLog = now;
+          this.dumpAuraInspectionSnapshot({ reason: 'continuous' });
+        }
+      }
     }
+  }
+
+  /**
+   * Refresh aura cache on a unit when the CGUnit extension provides it.
+   * @param {wow.CGUnit | undefined} unit
+   */
+  static refreshAuras(unit) {
+    if (unit && typeof unit.forceUpdateAuras === 'function') {
+      unit.forceUpdateAuras();
+    }
+  }
+
+  /**
+   * @param {wow.AuraData} aura
+   * @param {wow.Guid | undefined} selfGuid
+   * @returns {string}
+   */
+  static formatAuraVerbose(aura, selfGuid) {
+    const casterIsSelf =
+      selfGuid && aura.casterGuid && typeof aura.casterGuid.equals === 'function' && aura.casterGuid.equals(selfGuid);
+    const remaining = aura.remaining !== undefined ? `${aura.remaining}ms` : 'n/a';
+    return (
+      `id=${aura.spellId} name="${aura.name || ''}" stacks=${aura.stacks ?? 1} remaining=${remaining} ` +
+      `duration=${aura.duration} exp=${aura.expiration} dispel=${aura.dispelType} flags=${aura.flags} ` +
+      `bossDebuff=${aura.isBossDebuff} casterIsSelf=${!!casterIsSelf}`
+    );
+  }
+
+  /**
+   * @param {wow.CGUnit} unit
+   * @param {string} label
+   */
+  dumpUnitAurasVerbose(unit, label) {
+    if (!(unit instanceof wow.CGUnit)) {
+      console.info(`[AuraInspect] ${label}: not a CGUnit`);
+      return;
+    }
+    DebugWindow.refreshAuras(unit);
+    const selfGuid = me ? me.guid : undefined;
+    console.info(`[AuraInspect] === ${label}: ${unit.unsafeName} (type=${unit.type} entry=${unit.entryId}) ===`);
+    const list = unit.auras || [];
+    if (list.length === 0) {
+      console.info('[AuraInspect] (no auras)');
+    } else {
+      list.forEach((aura) => {
+        console.info(`[AuraInspect]   ${DebugWindow.formatAuraVerbose(aura, selfGuid)}`);
+      });
+    }
+    if (unit.visibleAuras && unit.visibleAuras.length !== list.length) {
+      console.info(`[AuraInspect]   (visibleAuras count=${unit.visibleAuras.length} vs auras count=${list.length})`);
+    }
+    console.info(`[AuraInspect] === end ${label} ===`);
+  }
+
+  /**
+   * One-shot: player combat/cast snapshot + player, target, focus, optional ObjectManager selection.
+   * @param {{ reason?: string, includeSelectedObject?: boolean }} [opts]
+   */
+  dumpAuraInspectionSnapshot(opts = {}) {
+    const reason = opts.reason || 'manual';
+    if (!me) {
+      console.info(`[AuraInspect:${reason}] me is null`);
+      return;
+    }
+
+    DebugWindow.refreshAuras(me);
+    const selfGuid = me.guid;
+
+    console.info(`[AuraInspect:${reason}] ---------- player state ----------`);
+    console.info(
+      `[AuraInspect:${reason}] inCombat=${me.inCombat()} isCastingOrChanneling=${me.isCastingOrChanneling} ` +
+        `currentCast=${me.currentCast} currentChannel=${me.currentChannel} isMounted=${me.isMounted}`
+    );
+    if (typeof me.isUnableToCast === 'function') {
+      console.info(`[AuraInspect:${reason}] isUnableToCast=${me.isUnableToCast()}`);
+    }
+    console.info(`[AuraInspect:${reason}] unitFlags=${me.unitFlags} unitFlags2=${me.unitFlags2} unitFlags3=${me.unitFlags3}`);
+
+    this.dumpUnitAurasVerbose(me, 'PLAYER');
+
+    const target = me.targetUnit;
+    if (target) {
+      this.dumpUnitAurasVerbose(target, 'TARGET');
+    } else {
+      console.info(`[AuraInspect:${reason}] TARGET: (no targetUnit)`);
+    }
+
+    const focus = me.focusTarget;
+    if (focus instanceof wow.CGUnit) {
+      this.dumpUnitAurasVerbose(focus, 'FOCUS');
+    } else {
+      console.info(`[AuraInspect:${reason}] FOCUS: (no focus unit)`);
+    }
+
+    if (opts.includeSelectedObject && this.selected) {
+      const obj = objMgr.objects.get(this.selected);
+      if (obj instanceof wow.CGUnit) {
+        this.dumpUnitAurasVerbose(obj, 'OBJECT_MANAGER_SELECTED');
+      } else {
+        console.info(`[AuraInspect:${reason}] OBJECT_MANAGER_SELECTED: not a unit or none`);
+      }
+    }
+
+    console.info(`[AuraInspect:${reason}] ---------- end snapshot ----------`);
   }
 
   render(open) {
@@ -356,6 +472,21 @@ class DebugWindow {
   }
   renderDump() {
     imgui.text("One-shot dumps to console log:");
+    imgui.separator();
+
+    imgui.text("Aura inspection (verbose, generic)");
+    imgui.textWrapped(
+      "Logs full aura rows (ids, duration, flags, caster=self) plus player combat/cast flags. " +
+        "Use when debugging dungeon phases, Console Power-style debuffs, or compare with target/focus."
+    );
+    if (imgui.button("Verbose snapshot: Player + Target + Focus")) {
+      this.dumpAuraInspectionSnapshot({ reason: 'button' });
+    }
+    if (imgui.button("Verbose snapshot: + ObjectManager selection")) {
+      this.dumpAuraInspectionSnapshot({ reason: 'button+om', includeSelectedObject: true });
+    }
+    imgui.checkbox("Continuous verbose snapshots (while Debug open)", this.auraInspectContinuous);
+    imgui.sliderInt("Continuous interval (ms)", this.auraInspectIntervalMs, 250, 10000);
     imgui.separator();
 
     if (imgui.button("Dump Player Auras")) {
