@@ -49,7 +49,21 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Huddle", ret => Pet.current &&
         Pet.current.hasAuraByMe(auras.darkTransformation) &&
         Spell.getTimeSinceLastCast("Dark Transformation") < 5000),
-      spell.cast("Strangulate", on => this.strangulateTarget(), ret => me.target && me.target.pctHealth < 70 && this.strangulateTarget() !== undefined),
+      new bt.Sequence(
+        "Strangulate healer",
+        new bt.Action(() => {
+          if (!me.target || me.target.pctHealth >= 70) {
+            return bt.Status.Failure;
+          }
+          const t = this.strangulateTarget();
+          if (!t || !t.isHealer()) {
+            return bt.Status.Failure;
+          }
+          spell._currentTarget = t;
+          return bt.Status.Success;
+        }),
+        spell.castEx("Strangulate")
+      ),
       spell.cast("Blinding Sleet", on => this.blindingSleetTarget(), ret => this.blindingSleetTarget() !== undefined),
       new bt.Decorator(
         ret => !spell.isGlobalCooldown(),
@@ -136,11 +150,25 @@ export class DeathKnightUnholy extends Behavior {
   }
 
   strangulateTarget() {
-    // Get all enemy players within 20 yards and find the first valid healer target
-    const nearbyEnemies = me.getPlayerEnemies(20);
+    // Prefer a healer who is not our current kill target (when one exists), then fallback.
+    // Sort by distance so iteration order is stable (objMgr order is arbitrary).
+    const nearbyEnemies = me.getPlayerEnemies(20).sort((a, b) => me.distanceTo(a) - me.distanceTo(b));
+
+    const isValid = (unit) =>
+      unit.isHealer() &&
+      me.isFacing(unit) &&
+      me.withinLineOfSight(unit) &&
+      !unit.isCCd() &&
+      unit.canCC() &&
+      unit.getDR("silence") === 0;
 
     for (const unit of nearbyEnemies) {
-      if (unit.isHealer() && !unit.isCCd() && unit.canCC() && unit.getDR("silence") === 0) {
+      if (unit !== me.target && isValid(unit)) {
+        return unit;
+      }
+    }
+    for (const unit of nearbyEnemies) {
+      if (isValid(unit)) {
         return unit;
       }
     }

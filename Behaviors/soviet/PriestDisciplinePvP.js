@@ -22,6 +22,8 @@ const auras = {
   powerWordShield: 17,
   atonement: 194384,
   surgeOfLight: 114255,
+  voidShield: 1253593,
+  shadowMend: 1252217,
   powerInfusion: 10060,
   archangel: 81700,
 };
@@ -635,6 +637,11 @@ export class PriestDisciplinePvP extends Behavior {
           toastSuccess(`Power Word: Barrier placed`, 1.2, 3000);
         }
       }),
+      // Proc-based overrides: prefer these first so lockouts can still use the available school.
+      spell.cast("Void Shield", on => this.healTarget, ret =>
+        me.hasAura(auras.voidShield) && this.healTarget?.effectiveHealthPercent < 92),
+      spell.cast("Shadow Mend", on => this.healTarget, ret =>
+        me.hasAura(auras.shadowMend) && this.healTarget?.effectiveHealthPercent < 90),
       spell.cast("Power Word: Shield", on => this.healTarget, ret => this.healTarget?.effectiveHealthPercent < 89 && !this.hasShield(this.healTarget)),
       spell.cast("Plea", on => this.healTarget, ret =>
         this.healTarget?.effectiveHealthPercent < 85 && !this.hasAtonement(this.healTarget)

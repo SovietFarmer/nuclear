@@ -73,7 +73,6 @@ const auras = {
   fluidForm: 449193,
   heartOfTheWild: 319454,
   naturesVigil: 124974,
-  undergrowth: 392301,
 
   // Midnight talents
   everbloom: "Everbloom",
@@ -158,9 +157,8 @@ export class JmrRestoDruidBehavior extends Behavior {
     {
       header: "HoT Management",
       options: [
-        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom", default: true },
-        { type: "checkbox", uid: "PrioritizeLifebloomOnTanks", text: "Prioritize Lifebloom on Tanks", default: false },
-        { type: "checkbox", uid: "UseLifebloomHealing", text: "Use Lifebloom for Normal Healing", default: true },
+        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom (tank only)", default: true },
+        { type: "checkbox", uid: "UseLifebloomHealing", text: "Allow Lifebloom on non-tanks (<40% HP)", default: false },
         { type: "slider", uid: "LifebloomHealingHealthPct", text: "Lifebloom Healing Health %", min: 0, max: 95, default: 90 },
         { type: "checkbox", uid: "MaintainEfflorescence", text: "Maintain Efflorescence (manual, auto-skipped with Lifetreading)", default: true },
         { type: "slider", uid: "EfflorescenceMinTargets", text: "Efflorescence Min Targets", min: 1, max: 5, default: 2 },
@@ -191,7 +189,8 @@ export class JmrRestoDruidBehavior extends Behavior {
         { type: "checkbox", uid: "UseEfflorescence", text: "Use Efflorescence", default: true },
         { type: "slider", uid: "EfflorescenceDelay", text: "Efflorescence Cast Delay (ms)", min: 0, max: 10000, default: 5000 },
         { type: "checkbox", uid: "UseRevitalize", text: "Use Revitalize (Mass Resurrection)", default: true },
-        { type: "checkbox", uid: "UseSymbioticRelationship", text: "Use Symbiotic Relationship", default: true }
+        { type: "checkbox", uid: "UseSymbioticRelationship", text: "Use Symbiotic Relationship (tank only)", default: true },
+        { type: "checkbox", uid: "SymbioticFallbackNonTank", text: "Symbiotic Relationship on non-tank if no tank", default: false }
       ]
     },
     {
@@ -362,11 +361,9 @@ export class JmrRestoDruidBehavior extends Behavior {
           spell.cast("Symbiotic Relationship", on => this.getSymbioticRelationshipTarget(), req =>
             Settings.UseSymbioticRelationship &&
             this.getSymbioticRelationshipTarget() !== null &&
-            !me.hasAuraByMe(474754) &&
-            me.getFriends(40).length > 2 &&
-            !spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Symbiotic Relationship") &&
-            !this.getSymbioticRelationshipTarget().inCombat() &&
-            !me.inCombat()
+            !this.friendHasSymbiotic(me) &&
+            !me.inCombat() &&
+            spell.getTimeSinceLastCast("Symbiotic Relationship") > 10000
           ),
 
           // Mark of the Wild maintenance (high priority utility)
@@ -853,7 +850,8 @@ export class JmrRestoDruidBehavior extends Behavior {
 
        // Fluid Form optimization: Use Rake for Convoke setup if Rake would be next
        new bt.Decorator(
-         () => Settings.UseConvokeForDPS &&
+         () => this.hasTalent("Fluid Form") &&
+               Settings.UseConvokeForDPS &&
                this.getEnemiesInRange(40) <= 6 &&
                !me.hasAuraByMe(auras.catForm) &&
                !me.hasAuraByMe(432031) &&
@@ -863,7 +861,6 @@ export class JmrRestoDruidBehavior extends Behavior {
                 !spell.isSpellKnown("Heart of the Wild") ||
                 spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
                 !Settings.UseHeartOfTheWild) &&
-               this.hasTalent("Fluid Form") &&
                spell.getCooldown(1822).ready &&
                this.shouldCastRakeNext(),
         new bt.Action(() => {
@@ -878,9 +875,52 @@ export class JmrRestoDruidBehavior extends Behavior {
         })
       ),
 
-      // Cat Form for Convoke setup (without Fluid Form or Rake target not in melee)
+      // Convoke setup: Fluid Form — enter cat via Rake or Shred (auto-shift), no explicit Cat Form
+      new bt.Action(() => {
+        if (!this.hasTalent("Fluid Form")) {
+          return bt.Status.Failure;
+        }
+        if (!(
+          Settings.UseConvokeForDPS &&
+          this.getEnemiesInRange(40) <= 6 &&
+          !me.hasAuraByMe(auras.catForm) &&
+          !me.hasAuraByMe(432031) &&
+          me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
+          this.canShiftForms() &&
+          spell.isSpellKnown("Convoke the Spirits") &&
+          spell.getCooldown("Convoke the Spirits").timeleft <= 1500 &&
+          (me.hasAuraByMe(auras.heartOfTheWild) ||
+           !spell.isSpellKnown("Heart of the Wild") ||
+           spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
+           !Settings.UseHeartOfTheWild)
+        )) {
+          return bt.Status.Failure;
+        }
+        const rakeTarget = this.getRakeTarget();
+        if (rakeTarget && me.distanceTo(rakeTarget) <= 8 && spell.getCooldown(1822).ready) {
+          const rakeSpell = spell.getSpell(1822);
+          if (rakeSpell && spell.castPrimitive(rakeSpell, rakeTarget)) {
+            this.trackComboGenerator("Rake");
+            this.trackCatFormEntry();
+            return bt.Status.Success;
+          }
+        }
+        const ct = this.getCurrentTarget();
+        if (ct && me.distanceTo(ct) <= 8 && this.isValidDPSTarget(ct) && spell.getCooldown(5221).ready) {
+          const shredSpell = spell.getSpell(5221);
+          if (shredSpell && spell.castPrimitive(shredSpell, ct)) {
+            this.trackComboGenerator("Shred");
+            this.trackCatFormEntry();
+            return bt.Status.Success;
+          }
+        }
+        return bt.Status.Failure;
+      }),
+
+      // Convoke setup: no Fluid Form — explicit Cat Form before Convoke (Rake does not auto-shift)
       new bt.Sequence(
         spell.cast("Cat Form", () =>
+          !this.hasTalent("Fluid Form") &&
           Settings.UseConvokeForDPS &&
           this.getEnemiesInRange(40) <= 6 &&
           !me.hasAuraByMe(auras.catForm) &&
@@ -891,8 +931,7 @@ export class JmrRestoDruidBehavior extends Behavior {
           (me.hasAuraByMe(auras.heartOfTheWild) ||
            !spell.isSpellKnown("Heart of the Wild") ||
            spell.getCooldown("Heart of the Wild").timeleft > 30000 ||
-           !Settings.UseHeartOfTheWild) &&
-          (!this.hasTalent("Fluid Form") || !this.shouldCastRakeNext() || !this.isRakeTargetInMelee())
+           !Settings.UseHeartOfTheWild)
         ),
         new bt.Action(() => {
           this.trackFormShift();
@@ -952,10 +991,10 @@ export class JmrRestoDruidBehavior extends Behavior {
         })
       ),
 
-      // Fluid Form optimization: Use Rake to enter Cat Form if Rake would be our next cast
+      // Fluid Form: enter cat via Rake when out of form (auto-shift)
       new bt.Decorator(
         () => {
-          const hasFluidForm = this.hasTalent("Fluid Form");
+          if (!this.hasTalent("Fluid Form")) return false;
           const shouldRake = this.shouldCastRakeNext();
           const notInCat = !me.hasAuraByMe(auras.catForm);
           const notFormLocked = !me.hasAuraByMe(432031);
@@ -964,10 +1003,10 @@ export class JmrRestoDruidBehavior extends Behavior {
           const hasAttackableTargets = this.getAttackableEnemiesInRange(8) > 0;
 
           if (Settings.CatWeavingDebug && notInCat && hasEnergy) {
-            console.info(`[RestoDruid] Fluid Form Rake check - FluidForm: ${hasFluidForm}, ShouldRake: ${shouldRake}, RakeReady: ${rakeReady}, FormLocked: ${!notFormLocked}, AttackableTargets: ${hasAttackableTargets}`);
+            console.info(`[RestoDruid] Fluid Form Rake check - ShouldRake: ${shouldRake}, RakeReady: ${rakeReady}, FormLocked: ${!notFormLocked}, AttackableTargets: ${hasAttackableTargets}`);
           }
 
-          return notInCat && notFormLocked && hasEnergy && hasFluidForm && rakeReady && shouldRake && hasAttackableTargets;
+          return notInCat && notFormLocked && hasEnergy && rakeReady && shouldRake && hasAttackableTargets;
         },
         new bt.Sequence(
           spell.cast("Rake", on => this.getRakeTarget(), req =>
@@ -985,14 +1024,14 @@ export class JmrRestoDruidBehavior extends Behavior {
         )
       ),
 
-      // Cat Form if not in it and have energy (without Fluid Form or Rake target not in melee)
+      // No Fluid Form: explicit Cat Form to enter melee form (Rake does not auto-shift)
       new bt.Sequence(
         spell.cast("Cat Form", () =>
+          !this.hasTalent("Fluid Form") &&
           !me.hasAuraByMe(auras.catForm) &&
           me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
           this.canShiftForms() &&
-          this.getAttackableEnemiesInRange(8) > 0 &&
-          (!this.hasTalent("Fluid Form") || !this.shouldCastRakeNext() || !this.isRakeTargetInMelee())
+          this.getAttackableEnemiesInRange(8) > 0
         ),
         new bt.Action(() => {
           this.trackFormShift();
@@ -1023,12 +1062,12 @@ export class JmrRestoDruidBehavior extends Behavior {
         (this.getEnemiesInRange(40) === 1 || (this.getEnemiesInRange(40) < 8 && !me.hasAuraByMe(auras.catForm)))
       ),
 
-      // Fluid Form optimization: Use Shred to enter Cat Form if Shred would be our next cast
+      // Fluid Form: enter cat via Shred when out of form (auto-shift)
       new bt.Decorator(
-        () => !me.hasAuraByMe(auras.catForm) &&
+        () => this.hasTalent("Fluid Form") &&
+              !me.hasAuraByMe(auras.catForm) &&
               !me.hasAuraByMe(432031) &&
               me.powerByType(PowerType.Energy) > 50 &&
-              this.hasTalent("Fluid Form") &&
               spell.getCooldown(5221).ready &&
               this.getAttackableEnemiesInRange(8) > 0 &&
               this.shouldCastShredNext(),
@@ -1044,22 +1083,6 @@ export class JmrRestoDruidBehavior extends Behavior {
             return bt.Status.Success;
           })
         )
-      ),
-
-      // Cat Form if not in it and have energy (without Fluid Form or Shred target not in melee)
-      new bt.Sequence(
-        spell.cast("Cat Form", () =>
-          !me.hasAuraByMe(auras.catForm) &&
-          me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
-          this.canShiftForms() &&
-          this.getAttackableEnemiesInRange(8) > 0 &&
-          (!this.hasTalent("Fluid Form") || !this.shouldCastShredNext() || !this.isCurrentTargetInMelee())
-        ),
-        new bt.Action(() => {
-          this.trackFormShift();
-          this.trackCatFormEntry();
-          return bt.Status.Success;
-        })
       ),
 
       // Ferocious Bite finisher
@@ -1139,11 +1162,11 @@ export class JmrRestoDruidBehavior extends Behavior {
         })
       ),
 
-      // Fluid Form optimization: Use Rake as fallback to enter Cat Form if Rake would be next
+      // Fluid Form: Rake fallback to enter cat when out of form
       new bt.Decorator(
-        () => !me.hasAuraByMe(auras.catForm) &&
+        () => this.hasTalent("Fluid Form") &&
+              !me.hasAuraByMe(auras.catForm) &&
               !me.hasAuraByMe(432031) &&
-              this.hasTalent("Fluid Form") &&
               spell.getCooldown(1822).ready &&
               this.getAttackableEnemiesInRange(8) > 0 &&
               this.shouldCastRakeNext(),
@@ -1159,22 +1182,6 @@ export class JmrRestoDruidBehavior extends Behavior {
             }
           }
           return bt.Status.Failure;
-        })
-      ),
-
-      // Cat Form fallback (without Fluid Form or Rake target not in melee)
-      new bt.Sequence(
-        spell.cast("Cat Form", () =>
-          !me.hasAuraByMe(auras.catForm) &&
-          me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
-          this.canShiftForms() &&
-          this.getAttackableEnemiesInRange(8) > 0 &&
-          (!this.hasTalent("Fluid Form") || !this.shouldCastRakeNext() || !this.isRakeTargetInMelee())
-        ),
-        new bt.Action(() => {
-          this.trackFormShift();
-          this.trackCatFormEntry();
-          return bt.Status.Success;
         })
       ),
 
@@ -1232,32 +1239,55 @@ export class JmrRestoDruidBehavior extends Behavior {
         (this.getEnemiesInRange(40) > 1 || me.hasAuraByMe(auras.heartOfTheWild))
       ),
 
-      new bt.Sequence(
-        spell.cast("Cat Form", () =>
-          !me.hasAuraByMe(auras.catForm) &&
-          me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
-          this.canShiftForms() &&
-          this.getAttackableEnemiesInRange(8) > 0 &&
-          (!this.hasTalent("Fluid Form") || !this.shouldCastRakeNext() || !this.isRakeTargetInMelee())
+      // Melee Shred from caster: Fluid Form = auto-shift only; no Fluid Form = Cat Form then Shred
+      new bt.Selector(
+        new bt.Decorator(
+          () => this.hasTalent("Fluid Form"),
+          new bt.Sequence(
+            new bt.Action(() => {
+              this._casterShredEnteredFromCaster = !me.hasAuraByMe(auras.catForm);
+              return bt.Status.Success;
+            }),
+            spell.cast("Shred", on => this.getCurrentTarget(), req =>
+              this.getCurrentTarget() !== null &&
+              me.distanceTo(this.getCurrentTarget()) <= 8 &&
+              this.isValidDPSTarget(this.getCurrentTarget()) &&
+              me.powerByType(PowerType.Energy) >= 40
+            ),
+            new bt.Action(() => {
+              this.trackComboGenerator("Shred");
+              if (this._casterShredEnteredFromCaster) {
+                this.trackCatFormEntry();
+              }
+              return bt.Status.Success;
+            })
+          )
         ),
-        new bt.Action(() => {
-          this.trackFormShift();
-          this.trackCatFormEntry();
-          return bt.Status.Success;
-        })
-      ),
-
-      // Basic Shred fallback (should always work in cat form with energy)
-      new bt.Sequence(
-        spell.cast("Shred", on => this.getCurrentTarget(), req =>
-          this.getCurrentTarget() !== null &&
-          me.hasAuraByMe(auras.catForm) &&
-          me.powerByType(PowerType.Energy) >= 40
-        ),
-        new bt.Action(() => {
-          this.trackComboGenerator("Shred");
-          return bt.Status.Success;
-        })
+        new bt.Sequence(
+          spell.cast("Cat Form", () =>
+            !this.hasTalent("Fluid Form") &&
+            !me.hasAuraByMe(auras.catForm) &&
+            me.powerByType(PowerType.Energy) >= Settings.CatFormEntryEnergyThreshold &&
+            this.canShiftForms() &&
+            this.getAttackableEnemiesInRange(8) > 0
+          ),
+          new bt.Action(() => {
+            this.trackFormShift();
+            this.trackCatFormEntry();
+            return bt.Status.Success;
+          }),
+          spell.cast("Shred", on => this.getCurrentTarget(), req =>
+            this.getCurrentTarget() !== null &&
+            me.hasAuraByMe(auras.catForm) &&
+            me.distanceTo(this.getCurrentTarget()) <= 8 &&
+            this.isValidDPSTarget(this.getCurrentTarget()) &&
+            me.powerByType(PowerType.Energy) >= 40
+          ),
+          new bt.Action(() => {
+            this.trackComboGenerator("Shred");
+            return bt.Status.Success;
+          })
+        )
       ),
 
       // Wrath filler
@@ -1366,150 +1396,67 @@ export class JmrRestoDruidBehavior extends Behavior {
   getLifebloomTarget() {
     if (!Settings.MaintainLifebloom) return null;
 
-    const uniqueTargets = new Set();
+    const inRange = (f) => f && !f.deadOrGhost && me.distanceTo(f) <= 40;
 
-    try {
-      heal.friends.All.forEach(friend => {
-        try {
-          if (friend && !friend.deadOrGhost && me.distanceTo(friend) <= 40) {
-            uniqueTargets.add(friend);
-          }
-        } catch (friendError) {
-        }
-      });
-    } catch (error) {
+    const isExpiring = (f) => {
+      const aura = this.getLifebloomAura(f);
+      if (!aura) return false;
+      const r = aura.remaining;
+      return r === null || r === undefined || r === 0 || r <= 3500;
+    };
+
+    const isTank = (f) => heal.friends.Tanks.includes(f);
+
+    // Find tank in range
+    const tank = heal.friends.Tanks.find(t => inRange(t));
+
+    // Check if tank already has Lifebloom -- refresh if expiring
+    if (tank && this.friendHasLifebloom(tank)) {
+      return isExpiring(tank) ? tank : null;
     }
 
-    if (me && !me.deadOrGhost) {
-      uniqueTargets.add(me);
+    // Tank exists but doesn't have Lifebloom -- give it to them
+    if (tank) return tank;
+
+    // No tank in range -- only Lifebloom others if UseLifebloomHealing is enabled
+    if (!Settings.UseLifebloomHealing) return null;
+
+    // Refresh existing Lifebloom on anyone if expiring
+    const currentLB = heal.friends.All.find(f => inRange(f) && this.friendHasLifebloom(f));
+    if (currentLB) {
+      return isExpiring(currentLB) ? currentLB : null;
     }
 
-    const availableTargets = Array.from(uniqueTargets);
-    const maxLifeblooms = (me.hasAura(auras.undergrowth) && availableTargets.length >= 2) ? 2 : 1;
-
-    const uniqueFriendsWithLifebloom = new Set();
-    availableTargets.forEach(friend => {
-      if (this.friendHasLifebloom(friend)) {
-        uniqueFriendsWithLifebloom.add(friend);
-      }
-    });
-
-    const friendsWithLifebloom = Array.from(uniqueFriendsWithLifebloom);
-
-    // With Everbloom, never move Lifebloom -- losing stacks is very costly.
-    // Only refresh the existing target when expiring.
-    if (this.hasEverbloom() && friendsWithLifebloom.length > 0) {
-      const expiring = friendsWithLifebloom.find(friend => {
-        const lifebloomAura = this.getLifebloomAura(friend);
-        if (lifebloomAura) {
-          const remaining = lifebloomAura.remaining;
-          if (remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500) {
-            return true;
-          }
-        }
-        return false;
-      });
-      return expiring || null;
-    }
-
-    if (friendsWithLifebloom.length >= maxLifeblooms) {
-      const expiring = friendsWithLifebloom.find(friend => {
-        const lifebloomAura = this.getLifebloomAura(friend);
-        if (lifebloomAura) {
-          const remaining = lifebloomAura.remaining;
-          if (remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500) {
-            return true;
-          }
-        }
-        return false;
-      });
-
-      return expiring || null;
-    }
-
-    // Priority order: DPS > Other non-tanks > Me > Tanks
-
-    // 1. Prioritize DPS friends without Lifebloom
-    const dpsWithoutLifebloom = heal.friends.DPS.filter(friend =>
-      friend && !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !this.friendHasLifebloom(friend)
+    // No Lifebloom active and no tank -- lowest HP friend
+    const lowest = heal.friends.All.find(f =>
+      inRange(f) && f.effectiveHealthPercent < 40
     );
-
-    if (dpsWithoutLifebloom.length > 0) {
-      return dpsWithoutLifebloom[0];
-    }
-
-    // 2. Other non-tank friends without Lifebloom (excluding DPS already checked)
-    const otherNonTankFriends = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !this.isFriendATank(friend) &&
-      !this.friendHasLifebloom(friend) &&
-      !heal.friends.DPS.includes(friend) // Exclude DPS (already checked above)
-    );
-
-    if (otherNonTankFriends.length > 0) {
-      return otherNonTankFriends[0];
-    }
-
-    // 3. Me (only if we don't have our own Lifebloom)
-    if (!this.friendHasLifebloom(me)) {
-      return me;
-    }
-
-    // Finally tanks (only if setting enabled)
-    if (Settings.PrioritizeLifebloomOnTanks) {
-      const tank = heal.friends.Tanks.find(tank =>
-        tank && !tank.deadOrGhost &&
-        me.distanceTo(tank) <= 40 &&
-        !this.friendHasLifebloom(tank)
-      );
-      if (tank) return tank;
-    }
-
-    return null;
+    return lowest || null;
   }
 
   getLifebloomHealingTarget() {
-    // This is for reactive healing - respects global Lifebloom limits and duration
+    // Only fires when UseLifebloomHealing is enabled (non-tank Lifebloom)
     if (!Settings.UseLifebloomHealing) return null;
 
-    // Count current active Lifeblooms
-    const currentLifeblooms = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost && this.friendHasLifebloom(friend)
-    ).length;
+    // Never steal Lifebloom from tank -- if tank has it, skip
+    const tankHasLB = heal.friends.Tanks.some(t =>
+      t && !t.deadOrGhost && this.friendHasLifebloom(t)
+    );
+    if (tankHasLB) return null;
 
-    // Check if we have Undergrowth talent for 2 Lifeblooms, otherwise max 1
-    const maxLifeblooms = me.hasAura(auras.undergrowth) ? 2 : 1;
+    // Someone already has Lifebloom (non-tank) -- don't move it
+    const anyoneLB = heal.friends.All.find(f =>
+      f && !f.deadOrGhost && me.distanceTo(f) <= 40 && this.friendHasLifebloom(f)
+    );
+    if (anyoneLB) return null;
 
-    // If we're at max Lifeblooms, only refresh expiring ones (< 4 seconds)
-    if (currentLifeblooms >= maxLifeblooms) {
-      const expiringLifebloom = heal.friends.All.find(friend => {
-        if (!friend || friend.deadOrGhost || me.distanceTo(friend) > 40) return false;
-
-        const lifebloomAura = this.getLifebloomAura(friend);
-        if (!lifebloomAura) return false;
-
-        const remaining = lifebloomAura.remaining || 0;
-        return remaining !== null && remaining <= 4000; // 4 seconds
-      });
-
-      // Only return expiring Lifebloom if the target also needs healing
-      if (expiringLifebloom && expiringLifebloom.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct) {
-        return expiringLifebloom;
-      }
-
-      return null; // At max Lifeblooms and none expiring or needing heal
-    }
-
-    // We can cast new Lifeblooms - find lowest health friend who needs healing and doesn't have Lifebloom
+    // No Lifebloom active anywhere and no tank in range -- lowest HP non-tank
     const target = heal.friends.All
-      .filter(friend =>
-        friend && !friend.deadOrGhost &&
-        me.distanceTo(friend) <= 40 &&
-        friend.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct &&
-        !this.friendHasLifebloom(friend) // Don't overwrite our own Lifebloom
+      .filter(f =>
+        f && !f.deadOrGhost &&
+        me.distanceTo(f) <= 40 &&
+        f.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct &&
+        !heal.friends.Tanks.includes(f)
       )
       .sort((a, b) => a.effectiveHealthPercent - b.effectiveHealthPercent)[0];
 
@@ -1938,8 +1885,8 @@ export class JmrRestoDruidBehavior extends Behavior {
 
     const availableTargets = Array.from(uniqueTargets);
 
-    // Check how many Lifeblooms we can have (1 or 2 with Undergrowth)
-    const maxLifeblooms = (me.hasAura(auras.undergrowth) && availableTargets.length >= 2) ? 2 : 1;
+    // Midnight: keep a single Lifebloom target during ramp.
+    const maxLifeblooms = 1;
 
     // Count current Lifeblooms globally
     const allTargetsIncludingMe = [...heal.friends.All, me];
@@ -1956,52 +1903,17 @@ export class JmrRestoDruidBehavior extends Behavior {
       return null;
     }
 
-    // Need more Lifeblooms - priority: 2 non-tank party members > me > tank
-    const nonTankFriends = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !this.isFriendATank(friend) &&
-      !this.friendHasLifebloom(friend)
+    // Tank first, always
+    const tank = heal.friends.Tanks.find(t =>
+      t && !t.deadOrGhost && me.distanceTo(t) <= 40 && !this.friendHasLifebloom(t)
     );
+    if (tank) return tank;
 
-    // If we have Undergrowth and need 2 Lifeblooms, prioritize 2 party members first
-    if (me.hasAura(auras.undergrowth) && maxLifeblooms === 2) {
-      // Try to get 2 non-tank friends first
-      if (nonTankFriends.length > 0) {
-        return nonTankFriends[0]; // First non-tank friend
-      }
-
-      // If we only have 1 non-tank friend and they already have Lifebloom,
-      // check if we need to put the second one on me
-      const friendsWithLifebloom = nonTankFriends.filter(friend =>
-        this.friendHasLifebloom(friend)
-      );
-
-      if (friendsWithLifebloom.length >= 1 && !this.friendHasLifebloom(me)) {
-        return me; // Put second Lifebloom on me
-      }
-    } else {
-      // For non-Undergrowth or when we only need 1, prioritize party members > me
-      if (nonTankFriends.length > 0) {
-        return nonTankFriends[0];
-      }
-
-      if (!this.friendHasLifebloom(me)) {
-        return me;
-      }
-    }
-
-    // Finally tanks (only if setting enabled)
-    if (Settings.PrioritizeLifebloomOnTanks) {
-      const tank = heal.friends.Tanks.find(tank =>
-        tank && !tank.deadOrGhost &&
-        me.distanceTo(tank) <= 40 &&
-        !this.friendHasLifebloom(tank)
-      );
-      if (tank) return tank;
-    }
-
-    return null;
+    // During ramp, fall back to any non-tank without Lifebloom
+    const fallback = heal.friends.All.find(f =>
+      f && !f.deadOrGhost && me.distanceTo(f) <= 40 && !this.friendHasLifebloom(f)
+    );
+    return fallback || null;
   }
 
   // Ramp Rejuvenation targeting (specific priority order)
@@ -2277,25 +2189,26 @@ export class JmrRestoDruidBehavior extends Behavior {
     }
   }
 
+  friendHasSymbiotic(unit) {
+    return unit.hasAura(auras.symbioticRelationship) || unit.hasAura("Symbiotic Relationship") ||
+           unit.hasAura(474754) || unit.hasAuraByMe(auras.symbioticRelationship) || unit.hasAuraByMe("Symbiotic Relationship");
+  }
+
   getSymbioticRelationshipTarget() {
-    if (me.hasAuraByMe(474754)) {
-      return;
-    }
-    // Prioritize tanks if they don't have it
-    const tank = heal.friends.Tanks.find(tank =>
-      tank &&
-      !tank.deadOrGhost &&
-      me.distanceTo(tank) <= 40 &&
-      !tank.hasAuraByMe(auras.symbioticRelationship)
+    if (this.friendHasSymbiotic(me)) return null;
+
+    // Tank first, always
+    const tank = heal.friends.Tanks.find(t =>
+      t && !t.deadOrGhost && me.distanceTo(t) <= 40 && !this.friendHasSymbiotic(t)
     );
     if (tank) return tank;
 
-    // Otherwise any party member except me
-    return heal.friends.All.find(friend =>
-      friend &&
-      !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !friend.hasAuraByMe(auras.symbioticRelationship) && !friend.hasAuraByMe("Symbiotic Relationship")
+    // Non-tank fallback only if setting enabled
+    if (!Settings.SymbioticFallbackNonTank) return null;
+
+    return heal.friends.All.find(f =>
+      f && !f.deadOrGhost && f.isPlayer() &&
+      me.distanceTo(f) <= 40 && !this.friendHasSymbiotic(f)
     ) || null;
   }
 

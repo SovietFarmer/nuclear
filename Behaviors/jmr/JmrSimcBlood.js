@@ -163,10 +163,9 @@ export class DeathKnightBloodBehavior extends Behavior {
           // Dancing Rune Weapon
           spell.cast("Dancing Rune Weapon", req => this.shouldUseDRW()),
 
-          // Racials + Arcane Torrent + Trinkets
+          // Racials + Arcane Torrent
           this.useRacials(),
           spell.cast("Arcane Torrent", on => me, req => this.runicPowerDeficit() > 20),
-          common.useTrinkets(() => this.getCurrentTarget()),
 
           // --- Hero tree rotation routing (melee range gated) ---
           new bt.Decorator(

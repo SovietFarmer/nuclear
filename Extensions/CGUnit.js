@@ -394,7 +394,16 @@ Object.defineProperties(wow.CGUnit.prototype, {
 
   inCombatWith: {
     value: function (unit) {
-      return this.threats.find(guid => guid.equals(unit)) !== undefined;
+      if (!unit) {
+        return false;
+      }
+
+      const targetGuid = unit instanceof wow.Guid ? unit : unit.guid;
+      if (!targetGuid) {
+        return false;
+      }
+
+      return this.threats.some(guid => guid.equals(targetGuid));
     }
   },
 
