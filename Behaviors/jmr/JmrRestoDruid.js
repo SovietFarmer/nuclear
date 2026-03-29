@@ -157,8 +157,7 @@ export class JmrRestoDruidBehavior extends Behavior {
     {
       header: "HoT Management",
       options: [
-        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom", default: true },
-        { type: "checkbox", uid: "PrioritizeLifebloomOnTanks", text: "Prioritize Lifebloom on Tanks", default: false },
+        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom (always on tank)", default: true },
         { type: "checkbox", uid: "UseLifebloomHealing", text: "Use Lifebloom for Normal Healing", default: true },
         { type: "slider", uid: "LifebloomHealingHealthPct", text: "Lifebloom Healing Health %", min: 0, max: 95, default: 90 },
         { type: "checkbox", uid: "MaintainEfflorescence", text: "Maintain Efflorescence (manual, auto-skipped with Lifetreading)", default: true },
@@ -1398,108 +1397,39 @@ export class JmrRestoDruidBehavior extends Behavior {
   getLifebloomTarget() {
     if (!Settings.MaintainLifebloom) return null;
 
-    const uniqueTargets = new Set();
+    const isExpiring = (friend) => {
+      const aura = this.getLifebloomAura(friend);
+      if (!aura) return false;
+      const remaining = aura.remaining;
+      return remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500;
+    };
 
-    try {
-      heal.friends.All.forEach(friend => {
-        try {
-          if (friend && !friend.deadOrGhost && me.distanceTo(friend) <= 40) {
-            uniqueTargets.add(friend);
-          }
-        } catch (friendError) {
-        }
-      });
-    } catch (error) {
-    }
-
-    if (me && !me.deadOrGhost) {
-      uniqueTargets.add(me);
-    }
-
-    const availableTargets = Array.from(uniqueTargets);
-    // Midnight: keep a single Lifebloom target.
-    const maxLifeblooms = 1;
-
-    const uniqueFriendsWithLifebloom = new Set();
-    availableTargets.forEach(friend => {
-      if (this.friendHasLifebloom(friend)) {
-        uniqueFriendsWithLifebloom.add(friend);
-      }
-    });
-
-    const friendsWithLifebloom = Array.from(uniqueFriendsWithLifebloom);
+    const inRange = (friend) => friend && !friend.deadOrGhost && me.distanceTo(friend) <= 40;
 
     // With Everbloom, never move Lifebloom -- losing stacks is very costly.
     // Only refresh the existing target when expiring.
-    if (this.hasEverbloom() && friendsWithLifebloom.length > 0) {
-      const expiring = friendsWithLifebloom.find(friend => {
-        const lifebloomAura = this.getLifebloomAura(friend);
-        if (lifebloomAura) {
-          const remaining = lifebloomAura.remaining;
-          if (remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500) {
-            return true;
-          }
-        }
-        return false;
-      });
-      return expiring || null;
+    if (this.hasEverbloom()) {
+      const currentLB = heal.friends.All.find(f => inRange(f) && this.friendHasLifebloom(f));
+      if (currentLB) {
+        return isExpiring(currentLB) ? currentLB : null;
+      }
     }
 
-    if (friendsWithLifebloom.length >= maxLifeblooms) {
-      const expiring = friendsWithLifebloom.find(friend => {
-        const lifebloomAura = this.getLifebloomAura(friend);
-        if (lifebloomAura) {
-          const remaining = lifebloomAura.remaining;
-          if (remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500) {
-            return true;
-          }
-        }
-        return false;
-      });
-
-      return expiring || null;
+    // If someone already has Lifebloom, only return them if it's expiring (pandemic refresh)
+    const currentLB = heal.friends.All.find(f => inRange(f) && this.friendHasLifebloom(f));
+    if (currentLB) {
+      return isExpiring(currentLB) ? currentLB : null;
     }
 
-    // Priority order: DPS > Other non-tanks > Me > Tanks
+    // No active Lifebloom -- pick a new target. TANK FIRST, always.
+    const tank = heal.friends.Tanks.find(t => inRange(t));
+    if (tank) return tank;
 
-    // 1. Prioritize DPS friends without Lifebloom
-    const dpsWithoutLifebloom = heal.friends.DPS.filter(friend =>
-      friend && !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !this.friendHasLifebloom(friend)
+    // Only Lifebloom a non-tank if they're critically low (<40% HP)
+    const criticalFriend = heal.friends.All.find(f =>
+      inRange(f) && f.effectiveHealthPercent < 40
     );
-
-    if (dpsWithoutLifebloom.length > 0) {
-      return dpsWithoutLifebloom[0];
-    }
-
-    // 2. Other non-tank friends without Lifebloom (excluding DPS already checked)
-    const otherNonTankFriends = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !this.isFriendATank(friend) &&
-      !this.friendHasLifebloom(friend) &&
-      !heal.friends.DPS.includes(friend) // Exclude DPS (already checked above)
-    );
-
-    if (otherNonTankFriends.length > 0) {
-      return otherNonTankFriends[0];
-    }
-
-    // 3. Me (only if we don't have our own Lifebloom)
-    if (!this.friendHasLifebloom(me)) {
-      return me;
-    }
-
-    // Finally tanks (only if setting enabled)
-    if (Settings.PrioritizeLifebloomOnTanks) {
-      const tank = heal.friends.Tanks.find(tank =>
-        tank && !tank.deadOrGhost &&
-        me.distanceTo(tank) <= 40 &&
-        !this.friendHasLifebloom(tank)
-      );
-      if (tank) return tank;
-    }
+    if (criticalFriend) return criticalFriend;
 
     return null;
   }
@@ -1989,33 +1919,17 @@ export class JmrRestoDruidBehavior extends Behavior {
       return null;
     }
 
-    // Need more Lifeblooms - priority: non-tank party members > me > tank
-    const nonTankFriends = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !this.isFriendATank(friend) &&
-      !this.friendHasLifebloom(friend)
+    // Tank first, always
+    const tank = heal.friends.Tanks.find(t =>
+      t && !t.deadOrGhost && me.distanceTo(t) <= 40 && !this.friendHasLifebloom(t)
     );
+    if (tank) return tank;
 
-    if (nonTankFriends.length > 0) {
-      return nonTankFriends[0];
-    }
-
-    if (!this.friendHasLifebloom(me)) {
-      return me;
-    }
-
-    // Finally tanks (only if setting enabled)
-    if (Settings.PrioritizeLifebloomOnTanks) {
-      const tank = heal.friends.Tanks.find(tank =>
-        tank && !tank.deadOrGhost &&
-        me.distanceTo(tank) <= 40 &&
-        !this.friendHasLifebloom(tank)
-      );
-      if (tank) return tank;
-    }
-
-    return null;
+    // During ramp, fall back to any non-tank without Lifebloom
+    const fallback = heal.friends.All.find(f =>
+      f && !f.deadOrGhost && me.distanceTo(f) <= 40 && !this.friendHasLifebloom(f)
+    );
+    return fallback || null;
   }
 
   // Ramp Rejuvenation targeting (specific priority order)
