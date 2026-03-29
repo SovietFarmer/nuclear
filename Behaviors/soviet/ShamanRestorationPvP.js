@@ -51,7 +51,7 @@ export class ShamanRestorationPvP extends Behavior {
         { type: "slider", uid: "RShamPvPRiptidePct", text: "Riptide HP %", default: 85, min: 0, max: 100 },
         { type: "slider", uid: "RShamPvPHealingWavePct", text: "Healing Wave HP %", default: 80, min: 0, max: 100 },
         { type: "checkbox", uid: "RShamPvPUsePurge", text: "Use Greater Purge", default: false },
-        { type: "checkbox", uid: "RShamPvPUseLightningLasso", text: "Use Lightning Lasso", default: true },
+        { type: "checkbox", uid: "RShamPvPUseLightningLasso", text: "Use Lightning Lasso", default: false },
         { type: "checkbox", uid: "RShamPvPUseCapacitorTotem", text: "Use Capacitor Totem", default: true },
       ],
     },
@@ -64,13 +64,21 @@ export class ShamanRestorationPvP extends Behavior {
       common.waitForNotSitting(),
 
       // --- Off-GCD (BEFORE GCD gate) ---
-      spell.interrupt("Wind Shear", true),
-      spell.cast("Grounding Totem", on => me, ret => this.shouldDropGroundingForCC()),
+      new bt.Decorator(
+        () => !this.shouldProtectLassoChannel(),
+        spell.interrupt("Wind Shear", true)
+      ),
+      spell.cast("Grounding Totem", on => me, ret =>
+        !this.shouldProtectLassoChannel() && this.shouldDropGroundingForCC()
+      ),
+      spell.cast("Tremor Totem", on => me, ret =>
+        !this.shouldProtectLassoChannel() && this.shouldDropTremorForCC()
+      ),
       spell.cast("Spiritwalker's Grace", on => me, ret =>
+        !this.shouldProtectLassoChannel() &&
         me.isMoving() && !me.hasAura(auras.spiritWalkersGrace) &&
         this.isHealingNeeded() && !me.hasAuraByMe("Ghost Wolf")
       ),
-      spell.cast("Tremor Totem", on => me, ret => this.shouldDropTremorTotem()),
 
       common.waitForCastOrChannel(),
       new bt.Decorator(
@@ -311,11 +319,32 @@ export class ShamanRestorationPvP extends Behavior {
     const currentCast = me.currentCastOrChannel;
     if (currentCast.timeleft < 300) return false;
 
+    if (currentCast.name === "Lightning Lasso") {
+      return this.isTeamBelowHealth(50);
+    }
+
     const isDamageCast = [
       "Flame Shock", "Lava Burst", "Chain Lightning", "Lightning Bolt"
     ].includes(currentCast.name);
 
     return isDamageCast && this.isEmergencyHealingNeeded();
+  }
+
+  shouldProtectLassoChannel() {
+    if (!me.isCastingOrChanneling) return false;
+    const cast = me.currentCastOrChannel;
+    if (!cast || cast.name !== "Lightning Lasso") return false;
+    return !this.isTeamBelowHealth(50);
+  }
+
+  isTeamBelowHealth(threshold) {
+    const allies = heal.priorityList.filter(ally =>
+      ally && ally.isPlayer() && me.withinLineOfSight(ally)
+    );
+    if (!allies.some(ally => ally.guid.equals(me.guid))) {
+      allies.push(me);
+    }
+    return allies.some(ally => ally.effectiveHealthPercent < threshold);
   }
 
   isHealingNeeded() {
@@ -357,15 +386,47 @@ export class ShamanRestorationPvP extends Behavior {
     return false;
   }
 
-  // ---------------------------------------------------------------------------
-  // Helper: Tremor Totem (break Fear / Mind Control)
-  // ---------------------------------------------------------------------------
-
-  shouldDropTremorTotem() {
+  shouldDropTremorForCC() {
     if (!me.inCombat()) return false;
-    return heal.priorityList.some(ally =>
-      ally && ally.isPlayer() && (ally.isFeared || ally.hasAura("Mind Control"))
+    if (this.isTotemActive("Tremor Totem")) return false;
+    if (spell.getTimeSinceLastCast("Tremor Totem") < 2000) return false;
+
+    // Immediate break for already-applied fear / mind control style effects.
+    const allies = heal.priorityList.filter(ally => ally && ally.isPlayer());
+    allies.push(me);
+    const allyUnderCC = allies.some(ally =>
+      ally.isFeared || ally.hasAura("Mind Control") || ally.hasAura("Fear")
     );
+    if (allyUnderCC) return true;
+
+    // Predictive drop only for true casted fear/MC spells to avoid random Tremors.
+    const tremorReactiveCasts = new Set([
+      5782, // Fear
+      605, // Mind Control
+      383121, // Mass Fear
+      64044, // Psychic Horror
+    ]);
+
+    const enemies = combat.targets.filter(unit => unit && unit.isPlayer());
+    for (const enemy of enemies) {
+      try {
+        if (!enemy.isCastingOrChanneling || !enemy.spellInfo) continue;
+        const info = enemy.spellInfo;
+        const targetGuid = info.spellTargetGuid;
+        if (!targetGuid) continue;
+        if (!tremorReactiveCasts.has(info.spellCastId)) continue;
+
+        const castRemains = info.castEnd - wow.frameTime;
+        const isTargetingAlly = targetGuid.equals(me.guid) ||
+          heal.priorityList.some(ally => ally && targetGuid.equals(ally.guid));
+        if (isTargetingAlly && castRemains > 0 && castRemains <= 1200) {
+          return true;
+        }
+      } catch {
+        // Skip stale reads.
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------------------
