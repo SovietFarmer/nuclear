@@ -35,7 +35,7 @@ export const losExclude = {
   63191: true,  // Big boi
   137614: true, // Demolishing Terror
   137405: true, // Gripping Terror
-  77559: true,  // Skyreach - Solar Magnifier (commonly called Solar Elemental)
+  78933: true,  // Skyreach - Solar Elemental
 };
 
 // Exclusions for use (probably not interactable)
