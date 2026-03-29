@@ -33,6 +33,11 @@ const auras = {
  * Restoration Druid PvP — Midnight / Keeper (passive Grove Guardians on WG + Swiftmend; no Flourish button).
  * No Skull Bash / Mighty Bash interrupt; CC is Cyclone. Reactive Resin / Embrace of the Dream are passive — no extra casts.
  * Heal targeting: `heal.getPriorityPVPHealTarget()` + fallbacks (same idea as Resto Shaman). No cat weave; light Moonfire/Wrath filler.
+ *
+ * Lifebloom: one global bloom — no pandemic refresh. If anyone in 40y LoS still has your Lifebloom, never cast.
+ * After nobody in range has it (expired/dispel/out of range), wait N ms before re-applying; bypass wait if any in-range ally is critically low.
+ * While several people are under the urgent threshold, we keep the same sticky target (no ping-pong on lowest-HP sort).
+ * Lifebloom sits at the bottom of the heal list so RBG-sized groups do not starve Swiftmend/WG/Rejuv.
  */
 export class DruidRestorationPvP extends Behavior {
   name = "Restoration Druid PvP (Keeper)";
@@ -41,6 +46,12 @@ export class DruidRestorationPvP extends Behavior {
   version = wow.GameVersion.Retail;
 
   healTarget = null;
+
+  /** `wow.frameTime` when we first saw no Lifebloom from us on any in-range ally; -1 while someone in range still has it. */
+  _lifebloomAbsentSinceMs = -1;
+
+  /** Who we want Lifebloom on after drop/dispel — avoids swapping between two sub-urgent allies every evaluation. Synced to current holder while bloom is up. */
+  _lifebloomStickyGuid = null;
 
   static settings = [
     {
@@ -55,6 +66,8 @@ export class DruidRestorationPvP extends Behavior {
         { type: "slider", uid: "RDruidPvPWildGrowthPct", text: "Wild Growth ally HP % threshold", default: 92, min: 50, max: 100 },
         { type: "slider", uid: "RDruidPvPWildGrowthMin", text: "Wild Growth min hurt allies", default: 2, min: 2, max: 5 },
         { type: "slider", uid: "RDruidPvPRejuvPct", text: "Rejuvenation spread HP %", default: 96, min: 50, max: 100 },
+        { type: "slider", uid: "RDruidPvPLifebloomReapplyDelayMs", text: "Lifebloom: ms after no bloom in range before re-apply", default: 5000, min: 0, max: 20000 },
+        { type: "slider", uid: "RDruidPvPLifebloomUrgentPct", text: "Lifebloom: urgent HP %% (skip delay if ally this low)", default: 50, min: 15, max: 80 },
         { type: "checkbox", uid: "RDruidPvPUseCyclone", text: "Cyclone (healer / DPS CDs)", default: true },
         { type: "checkbox", uid: "RDruidPvPUseThorns", text: "Thorns when trained (melee on you)", default: true },
         { type: "checkbox", uid: "RDruidPvPUseConvokeHeal", text: "Convoke the Spirits (healing)", default: true },
@@ -276,7 +289,6 @@ export class DruidRestorationPvP extends Behavior {
         this.getIronbarkTarget() != null &&
         spell.getTimeSinceLastCast("Ironbark") > 2500
       ),
-      spell.cast("Lifebloom", on => this.getLifebloomTarget(), ret => this.getLifebloomTarget() != null),
       // Swiftmend + WG first (Midnight: passive treants); Rejuv spread follows to refresh HoTs for next mend.
       spell.cast("Swiftmend", on => this.getSwiftmendTarget(), ret =>
         this.getSwiftmendTarget() != null &&
@@ -299,6 +311,11 @@ export class DruidRestorationPvP extends Behavior {
       spell.cast("Regrowth", on => this.getPrimaryHealTarget(), ret =>
         this.getPrimaryHealTarget()?.effectiveHealthPercent < Settings.RDruidPvPRegrowthPct &&
         (!me.isMoving() || me.hasAura(auras.natureSwiftness))
+      ),
+      // Last: sticky Lifebloom — never refresh for pandemic; see getLifebloomTarget().
+      spell.cast("Lifebloom", on => this.getLifebloomTarget(), ret =>
+        this.getLifebloomTarget() != null &&
+        spell.getTimeSinceLastCast("Lifebloom") >= 1500
       )
     );
   }
@@ -402,24 +419,98 @@ export class DruidRestorationPvP extends Behavior {
     return u.hasAuraByMe(auras.lifebloom) || u.hasAuraByMe(auras.lifebloomResto);
   }
 
+  /** Party/raid/me in heal range — same pool RBG scripts care about (not every nameplate on the map). */
+  getAlliesInHealRange() {
+    const allies = heal.priorityList.filter(
+      a => a && a.isPlayer() && me.withinLineOfSight(a) && me.distanceTo(a) <= 40
+    );
+    if (!allies.some(a => a.guid.equals(me.guid))) allies.push(me);
+    return allies;
+  }
+
   /**
-   * Midnight Resto: only one Lifebloom at a time — always the primary heal target.
-   * Casting on a new focus moves the bloom; refresh when pandemic window (~4.5s).
+   * One Lifebloom total: leave it on whoever has it until it falls off / dispel / they leave 40y.
+   * Never refresh early. Re-apply only after nobody in heal range has your bloom for `LifebloomReapplyDelayMs`,
+   * unless any in-range ally is below `LifebloomUrgentPct` (then skip the wait).
+   * If multiple allies are sub-urgent, keep re-applying to the same sticky player until they are >= urgent or invalid — no A/B/A/B swaps.
    */
   getLifebloomTarget() {
-    const primary = this.getPrimaryHealTarget();
-    if (!primary || !me.withinLineOfSight(primary) || me.distanceTo(primary) > 40) {
+    const allies = this.getAlliesInHealRange();
+    if (allies.length === 0) return null;
+
+    const holder = allies.find(a => this.hasLifebloomOnUnit(a));
+    const now = wow.frameTime;
+
+    if (holder) {
+      this._lifebloomAbsentSinceMs = -1;
+      this._lifebloomStickyGuid = holder.guid;
       return null;
     }
-    if (!this.hasLifebloomOnUnit(primary)) {
+
+    if (this._lifebloomAbsentSinceMs < 0) {
+      this._lifebloomAbsentSinceMs = now;
+    }
+
+    const delayMs = Settings.RDruidPvPLifebloomReapplyDelayMs;
+    const urgentPct = Settings.RDruidPvPLifebloomUrgentPct;
+    const urgent = allies.some(a => a.effectiveHealthPercent < urgentPct);
+    const waited = delayMs <= 0 || now - this._lifebloomAbsentSinceMs >= delayMs;
+
+    if (!urgent && !waited) {
+      return null;
+    }
+
+    const sticky = this._resolveLifebloomStickyUnit(allies);
+    if (
+      sticky &&
+      sticky.effectiveHealthPercent < urgentPct
+    ) {
+      return sticky;
+    }
+
+    if (sticky && sticky.effectiveHealthPercent >= urgentPct) {
+      this._lifebloomStickyGuid = null;
+    }
+
+    const critical = allies.filter(a => a.effectiveHealthPercent < urgentPct);
+    if (critical.length > 0) {
+      this._sortLifebloomCriticalStable(critical);
+      const chosen = critical[0];
+      this._lifebloomStickyGuid = chosen.guid;
+      return chosen;
+    }
+
+    const primary = this.getPrimaryHealTarget();
+    if (
+      primary &&
+      allies.some(a => a.guid.equals(primary.guid)) &&
+      me.withinLineOfSight(primary) &&
+      me.distanceTo(primary) <= 40
+    ) {
+      this._lifebloomStickyGuid = primary.guid;
       return primary;
     }
-    const lb =
-      primary.getAuraByMe(auras.lifebloomResto) || primary.getAuraByMe(auras.lifebloom);
-    if (lb && lb.remaining > 0 && lb.remaining <= 4500) {
-      return primary;
-    }
-    return null;
+
+    this._sortLifebloomCriticalStable(allies);
+    const fallback = allies[0];
+    this._lifebloomStickyGuid = fallback.guid;
+    return fallback;
+  }
+
+  _resolveLifebloomStickyUnit(allies) {
+    if (!this._lifebloomStickyGuid) return null;
+    return allies.find(a => a && a.guid.equals(this._lifebloomStickyGuid)) || null;
+  }
+
+  /** HP first; tie identical percentages by GUID so two 40% targets don’t flip order frame-to-frame. */
+  _sortLifebloomCriticalStable(units) {
+    units.sort((a, b) => {
+      const d = a.effectiveHealthPercent - b.effectiveHealthPercent;
+      if (Math.abs(d) > 0.05) return d;
+      const ga = a.guid?.toString?.() ?? "";
+      const gb = b.guid?.toString?.() ?? "";
+      return ga.localeCompare(gb);
+    });
   }
 
   needsRejuvStack(u) {
