@@ -189,7 +189,8 @@ export class JmrRestoDruidBehavior extends Behavior {
         { type: "checkbox", uid: "UseEfflorescence", text: "Use Efflorescence", default: true },
         { type: "slider", uid: "EfflorescenceDelay", text: "Efflorescence Cast Delay (ms)", min: 0, max: 10000, default: 5000 },
         { type: "checkbox", uid: "UseRevitalize", text: "Use Revitalize (Mass Resurrection)", default: true },
-        { type: "checkbox", uid: "UseSymbioticRelationship", text: "Use Symbiotic Relationship", default: true }
+        { type: "checkbox", uid: "UseSymbioticRelationship", text: "Use Symbiotic Relationship (tank only)", default: true },
+        { type: "checkbox", uid: "SymbioticFallbackNonTank", text: "Symbiotic Relationship on non-tank if no tank", default: false }
       ]
     },
     {
@@ -360,11 +361,9 @@ export class JmrRestoDruidBehavior extends Behavior {
           spell.cast("Symbiotic Relationship", on => this.getSymbioticRelationshipTarget(), req =>
             Settings.UseSymbioticRelationship &&
             this.getSymbioticRelationshipTarget() !== null &&
-            !me.hasAuraByMe(474754) &&
-            me.getFriends(40).length > 2 &&
-            !spell.getLastSuccessfulSpells(2).find(spell => spell.name === "Symbiotic Relationship") &&
-            !this.getSymbioticRelationshipTarget().inCombat() &&
-            !me.inCombat()
+            !this.friendHasSymbiotic(me) &&
+            !me.inCombat() &&
+            spell.getTimeSinceLastCast("Symbiotic Relationship") > 10000
           ),
 
           // Mark of the Wild maintenance (high priority utility)
@@ -2190,25 +2189,26 @@ export class JmrRestoDruidBehavior extends Behavior {
     }
   }
 
+  friendHasSymbiotic(unit) {
+    return unit.hasAura(auras.symbioticRelationship) || unit.hasAura("Symbiotic Relationship") ||
+           unit.hasAura(474754) || unit.hasAuraByMe(auras.symbioticRelationship) || unit.hasAuraByMe("Symbiotic Relationship");
+  }
+
   getSymbioticRelationshipTarget() {
-    if (me.hasAuraByMe(474754)) {
-      return;
-    }
-    // Prioritize tanks if they don't have it
-    const tank = heal.friends.Tanks.find(tank =>
-      tank &&
-      !tank.deadOrGhost &&
-      me.distanceTo(tank) <= 40 &&
-      !tank.hasAuraByMe(auras.symbioticRelationship)
+    if (this.friendHasSymbiotic(me)) return null;
+
+    // Tank first, always
+    const tank = heal.friends.Tanks.find(t =>
+      t && !t.deadOrGhost && me.distanceTo(t) <= 40 && !this.friendHasSymbiotic(t)
     );
     if (tank) return tank;
 
-    // Otherwise any party member except me
-    return heal.friends.All.find(friend =>
-      friend &&
-      !friend.deadOrGhost &&
-      me.distanceTo(friend) <= 40 &&
-      !friend.hasAuraByMe(auras.symbioticRelationship) && !friend.hasAuraByMe("Symbiotic Relationship")
+    // Non-tank fallback only if setting enabled
+    if (!Settings.SymbioticFallbackNonTank) return null;
+
+    return heal.friends.All.find(f =>
+      f && !f.deadOrGhost && f.isPlayer() &&
+      me.distanceTo(f) <= 40 && !this.friendHasSymbiotic(f)
     ) || null;
   }
 
