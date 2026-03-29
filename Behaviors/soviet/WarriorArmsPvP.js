@@ -298,10 +298,16 @@ export class WarriorArmsPvP extends Behavior {
     return true;
   }
 
+  /** Demolish is channeled — only when kill target is stunned or rooted (CGUnit flags). */
+  isDemolishTargetControlled(unit) {
+    if (!unit) return false;
+    return unit.isStunned() || unit.isRooted();
+  }
+
   shouldCastDemolishBurst() {
     if (!spell.isSpellKnown("Demolish") || !this.isColossusBuild()) return false;
     const t = this.getCurrentTargetPVP();
-    if (!t) return false;
+    if (!t || !this.isDemolishTargetControlled(t)) return false;
     const stacks = this.colossalMightStacks();
     if (stacks < 4 && !this.hasSmashDebuffOn(t)) return false;
     return true;
@@ -310,7 +316,7 @@ export class WarriorArmsPvP extends Behavior {
   shouldCastDemolishSustained() {
     if (!spell.isSpellKnown("Demolish") || !this.isColossusBuild()) return false;
     const t = this.getCurrentTargetPVP();
-    if (!t) return false;
+    if (!t || !this.isDemolishTargetControlled(t)) return false;
     const stacks = this.colossalMightStacks();
     if (this.hasSmashDebuffOn(t) && stacks >= 4) return true;
     if (stacks >= 8) return true;
