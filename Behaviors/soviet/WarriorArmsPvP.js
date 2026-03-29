@@ -20,13 +20,15 @@ const auras = {
   colossalMight: 440989,
   /** Tactician proc buff — talent may also show as "Tactician"; use ID so Slam dump isn’t blocked forever. */
   tacticianProc: 199854,
+  /** Master of Warfare stack buff w/ duration — Slam becomes Heroic Strike (not 1269307, 0ms in log). */
+  masterOfWarfareProc: 1269394,
 };
 
 /**
  * Arms PvP (Midnight): Colossus + Slayer-friendly priority list.
  * Style matches `WarriorFuryPvP` (burst toggle, pvpAlwaysPerform, interrupt off-GCD).
  * Dropped from pre-Midnight JMR SIMC: Thunderous Roar, Ravager/Bonegrinder, Colossal Might 10-stack gate for every burst button.
- * Added: Heroic Strike proc priority, Demolish (Colossus), Slam rage dump when no Tactician proc (199854), optional Fervor Whirlwind consume.
+ * Added: Heroic Strike proc priority, Master of Warfare (1269394) rage dump → HS instead of Slam, Demolish (Colossus), Tactician proc (199854), Fervor Whirlwind consume.
  */
 export class WarriorArmsPvP extends Behavior {
   name = "Warrior (Arms) PvP";
@@ -175,6 +177,7 @@ export class WarriorArmsPvP extends Behavior {
       spell.cast("Mortal Strike", on => this.getCurrentTargetPVP()),
       spell.cast("Execute", on => this.getCurrentTargetPVP(), ret => this.shouldExecuteNow()),
       spell.cast("Bladestorm", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Bladestorm")),
+      spell.cast("Heroic Strike", on => this.getCurrentTargetPVP(), ret => this.shouldRageDumpHeroicStrike()),
       spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => this.shouldSlamDump()),
       spell.cast("Overpower", on => this.getCurrentTargetPVP()),
       this.sustainedDamage()
@@ -194,12 +197,14 @@ export class WarriorArmsPvP extends Behavior {
       spell.cast("Mortal Strike", on => this.getCurrentTargetPVP()),
       spell.cast("Execute", on => this.getCurrentTargetPVP(), ret => this.shouldExecuteNow()),
       spell.cast("Bladestorm", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Bladestorm")),
+      spell.cast("Heroic Strike", on => this.getCurrentTargetPVP(), ret => this.shouldRageDumpHeroicStrike()),
       spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => this.shouldSlamDump()),
       spell.cast("Overpower", on => this.getCurrentTargetPVP()),
       spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), ret => this.getEnemiesInRange(8) >= 3 && this.getEnemiesWithoutRend() >= 3),
       spell.cast("Rend", on => this.getNearbyEnemyWithoutRend(), ret => this.getEnemiesInRange(8) < 3 && this.getNearbyEnemyWithoutRend() !== null),
       spell.cast("Whirlwind", on => this.getCurrentTargetPVP(), ret => this.shouldFervorWhirlwindFiller()),
-      spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Slam"))
+      spell.cast("Heroic Strike", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Heroic Strike") && this.hasMasterOfWarfareProc()),
+      spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Slam") && !this.hasMasterOfWarfareProc())
     );
   }
 
@@ -254,9 +259,23 @@ export class WarriorArmsPvP extends Behavior {
     return me.hasAura("Heroic Strike") || me.hasAura("Improved Heroic Strike");
   }
 
+  /** Apex MoW: timed buff; treat Slam rage-dump windows as Heroic Strike instead. */
+  hasMasterOfWarfareProc() {
+    return Boolean(me.getAura(auras.masterOfWarfareProc));
+  }
+
+  /** Same gates as Slam dump, but when Master of Warfare converts Slam → Heroic Strike. */
+  shouldRageDumpHeroicStrike() {
+    if (!spell.isSpellKnown("Heroic Strike")) return false;
+    if (!this.hasMasterOfWarfareProc()) return false;
+    if (me.powerByType(PowerType.Rage) <= 50) return false;
+    if (this.hasTacticianProc()) return false;
+    return true;
+  }
+
   shouldWhirlwindConsumeHeroic() {
     if (!this.hasTalent("Fervor of Battle") || !spell.isSpellKnown("Whirlwind")) return false;
-    if (!this.hasHeroicStrikeProc()) return false;
+    if (!this.hasHeroicStrikeProc() && !this.hasMasterOfWarfareProc()) return false;
     return this.getEnemiesInRange(8) >= 2;
   }
 
@@ -273,6 +292,7 @@ export class WarriorArmsPvP extends Behavior {
 
   shouldSlamDump() {
     if (!spell.isSpellKnown("Slam")) return false;
+    if (this.hasMasterOfWarfareProc()) return false;
     if (me.powerByType(PowerType.Rage) <= 50) return false;
     if (this.hasTacticianProc()) return false;
     return true;
