@@ -16,13 +16,17 @@ const auras = {
   suddenDeath: 52437,
   hamstring: 1715,
   piercingHowlSlow: 12323,
+  /** Colossal Might (stacking buff w/ duration) — not 429634 (name collision, 0ms in log). */
+  colossalMight: 440989,
+  /** Tactician proc buff — talent may also show as "Tactician"; use ID so Slam dump isn’t blocked forever. */
+  tacticianProc: 199854,
 };
 
 /**
  * Arms PvP (Midnight): Colossus + Slayer-friendly priority list.
  * Style matches `WarriorFuryPvP` (burst toggle, pvpAlwaysPerform, interrupt off-GCD).
  * Dropped from pre-Midnight JMR SIMC: Thunderous Roar, Ravager/Bonegrinder, Colossal Might 10-stack gate for every burst button.
- * Added: Heroic Strike proc priority, Demolish (Colossus), Slam rage dump without Tactician, optional Fervor Whirlwind consume.
+ * Added: Heroic Strike proc priority, Demolish (Colossus), Slam rage dump when no Tactician proc (199854), optional Fervor Whirlwind consume.
  */
 export class WarriorArmsPvP extends Behavior {
   name = "Warrior (Arms) PvP";
@@ -171,8 +175,8 @@ export class WarriorArmsPvP extends Behavior {
       spell.cast("Mortal Strike", on => this.getCurrentTargetPVP()),
       spell.cast("Execute", on => this.getCurrentTargetPVP(), ret => this.shouldExecuteNow()),
       spell.cast("Bladestorm", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Bladestorm")),
-      spell.cast("Overpower", on => this.getCurrentTargetPVP()),
       spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => this.shouldSlamDump()),
+      spell.cast("Overpower", on => this.getCurrentTargetPVP()),
       this.sustainedDamage()
     );
   }
@@ -190,11 +194,12 @@ export class WarriorArmsPvP extends Behavior {
       spell.cast("Mortal Strike", on => this.getCurrentTargetPVP()),
       spell.cast("Execute", on => this.getCurrentTargetPVP(), ret => this.shouldExecuteNow()),
       spell.cast("Bladestorm", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Bladestorm")),
-      spell.cast("Overpower", on => this.getCurrentTargetPVP()),
       spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => this.shouldSlamDump()),
+      spell.cast("Overpower", on => this.getCurrentTargetPVP()),
       spell.cast("Thunder Clap", on => this.getCurrentTargetPVP(), ret => this.getEnemiesInRange(8) >= 3 && this.getEnemiesWithoutRend() >= 3),
       spell.cast("Rend", on => this.getNearbyEnemyWithoutRend(), ret => this.getEnemiesInRange(8) < 3 && this.getNearbyEnemyWithoutRend() !== null),
-      spell.cast("Whirlwind", on => this.getCurrentTargetPVP(), ret => this.hasTalent("Fervor of Battle"))
+      spell.cast("Whirlwind", on => this.getCurrentTargetPVP(), ret => this.shouldFervorWhirlwindFiller()),
+      spell.cast("Slam", on => this.getCurrentTargetPVP(), ret => spell.isSpellKnown("Slam"))
     );
   }
 
@@ -232,7 +237,7 @@ export class WarriorArmsPvP extends Behavior {
   }
 
   colossalMightStacks() {
-    const n = me.getAuraStacks("Colossal Might");
+    const n = me.getAuraStacks(auras.colossalMight);
     return typeof n === "number" ? n : 0;
   }
 
@@ -255,10 +260,21 @@ export class WarriorArmsPvP extends Behavior {
     return this.getEnemiesInRange(8) >= 2;
   }
 
+  /** Fervor filler only in cleave — ST rage dump is Slam, not WW. */
+  shouldFervorWhirlwindFiller() {
+    if (!this.hasTalent("Fervor of Battle") || !spell.isSpellKnown("Whirlwind")) return false;
+    return this.getEnemiesInRange(8) >= 2;
+  }
+
+  /** True while the spendable Tactician proc is up (not the passive talent aura). */
+  hasTacticianProc() {
+    return Boolean(me.getAura(auras.tacticianProc));
+  }
+
   shouldSlamDump() {
     if (!spell.isSpellKnown("Slam")) return false;
     if (me.powerByType(PowerType.Rage) <= 50) return false;
-    if (me.hasAura("Tactician")) return false;
+    if (this.hasTacticianProc()) return false;
     return true;
   }
 
