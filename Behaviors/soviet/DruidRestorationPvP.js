@@ -402,18 +402,24 @@ export class DruidRestorationPvP extends Behavior {
     return u.hasAuraByMe(auras.lifebloom) || u.hasAuraByMe(auras.lifebloomResto);
   }
 
+  /**
+   * Midnight Resto: only one Lifebloom at a time — always the primary heal target.
+   * Casting on a new focus moves the bloom; refresh when pandemic window (~4.5s).
+   */
   getLifebloomTarget() {
     const primary = this.getPrimaryHealTarget();
-    if (!primary) return null;
-    if (!this.hasLifebloomOnUnit(primary)) return primary;
-    const allies = heal.priorityList.filter(
-      a => a && a.isPlayer() && me.withinLineOfSight(a) && me.distanceTo(a) <= 40
-    );
-    if (!allies.some(a => a.guid.equals(me.guid))) allies.push(me);
-    const missing = allies.filter(a => !this.hasLifebloomOnUnit(a));
-    if (missing.length === 0) return null;
-    missing.sort((a, b) => a.effectiveHealthPercent - b.effectiveHealthPercent);
-    return missing[0];
+    if (!primary || !me.withinLineOfSight(primary) || me.distanceTo(primary) > 40) {
+      return null;
+    }
+    if (!this.hasLifebloomOnUnit(primary)) {
+      return primary;
+    }
+    const lb =
+      primary.getAuraByMe(auras.lifebloomResto) || primary.getAuraByMe(auras.lifebloom);
+    if (lb && lb.remaining > 0 && lb.remaining <= 4500) {
+      return primary;
+    }
+    return null;
   }
 
   needsRejuvStack(u) {
