@@ -157,8 +157,8 @@ export class JmrRestoDruidBehavior extends Behavior {
     {
       header: "HoT Management",
       options: [
-        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom (always on tank)", default: true },
-        { type: "checkbox", uid: "UseLifebloomHealing", text: "Use Lifebloom for Normal Healing", default: true },
+        { type: "checkbox", uid: "MaintainLifebloom", text: "Maintain Lifebloom (tank only)", default: true },
+        { type: "checkbox", uid: "UseLifebloomHealing", text: "Allow Lifebloom on non-tanks (<40% HP)", default: false },
         { type: "slider", uid: "LifebloomHealingHealthPct", text: "Lifebloom Healing Health %", min: 0, max: 95, default: 90 },
         { type: "checkbox", uid: "MaintainEfflorescence", text: "Maintain Efflorescence (manual, auto-skipped with Lifetreading)", default: true },
         { type: "slider", uid: "EfflorescenceMinTargets", text: "Efflorescence Min Targets", min: 1, max: 5, default: 2 },
@@ -1397,82 +1397,67 @@ export class JmrRestoDruidBehavior extends Behavior {
   getLifebloomTarget() {
     if (!Settings.MaintainLifebloom) return null;
 
-    const isExpiring = (friend) => {
-      const aura = this.getLifebloomAura(friend);
+    const inRange = (f) => f && !f.deadOrGhost && me.distanceTo(f) <= 40;
+
+    const isExpiring = (f) => {
+      const aura = this.getLifebloomAura(f);
       if (!aura) return false;
-      const remaining = aura.remaining;
-      return remaining === null || remaining === undefined || remaining === 0 || remaining <= 3500;
+      const r = aura.remaining;
+      return r === null || r === undefined || r === 0 || r <= 3500;
     };
 
-    const inRange = (friend) => friend && !friend.deadOrGhost && me.distanceTo(friend) <= 40;
+    const isTank = (f) => heal.friends.Tanks.includes(f);
 
-    // With Everbloom, never move Lifebloom -- losing stacks is very costly.
-    // Only refresh the existing target when expiring.
-    if (this.hasEverbloom()) {
-      const currentLB = heal.friends.All.find(f => inRange(f) && this.friendHasLifebloom(f));
-      if (currentLB) {
-        return isExpiring(currentLB) ? currentLB : null;
-      }
+    // Find tank in range
+    const tank = heal.friends.Tanks.find(t => inRange(t));
+
+    // Check if tank already has Lifebloom -- refresh if expiring
+    if (tank && this.friendHasLifebloom(tank)) {
+      return isExpiring(tank) ? tank : null;
     }
 
-    // If someone already has Lifebloom, only return them if it's expiring (pandemic refresh)
+    // Tank exists but doesn't have Lifebloom -- give it to them
+    if (tank) return tank;
+
+    // No tank in range -- only Lifebloom others if UseLifebloomHealing is enabled
+    if (!Settings.UseLifebloomHealing) return null;
+
+    // Refresh existing Lifebloom on anyone if expiring
     const currentLB = heal.friends.All.find(f => inRange(f) && this.friendHasLifebloom(f));
     if (currentLB) {
       return isExpiring(currentLB) ? currentLB : null;
     }
 
-    // No active Lifebloom -- pick a new target. TANK FIRST, always.
-    const tank = heal.friends.Tanks.find(t => inRange(t));
-    if (tank) return tank;
-
-    // Only Lifebloom a non-tank if they're critically low (<40% HP)
-    const criticalFriend = heal.friends.All.find(f =>
+    // No Lifebloom active and no tank -- lowest HP friend
+    const lowest = heal.friends.All.find(f =>
       inRange(f) && f.effectiveHealthPercent < 40
     );
-    if (criticalFriend) return criticalFriend;
-
-    return null;
+    return lowest || null;
   }
 
   getLifebloomHealingTarget() {
-    // This is for reactive healing - respects global Lifebloom limits and duration
+    // Only fires when UseLifebloomHealing is enabled (non-tank Lifebloom)
     if (!Settings.UseLifebloomHealing) return null;
 
-    // Count current active Lifeblooms
-    const currentLifeblooms = heal.friends.All.filter(friend =>
-      friend && !friend.deadOrGhost && this.friendHasLifebloom(friend)
-    ).length;
+    // Never steal Lifebloom from tank -- if tank has it, skip
+    const tankHasLB = heal.friends.Tanks.some(t =>
+      t && !t.deadOrGhost && this.friendHasLifebloom(t)
+    );
+    if (tankHasLB) return null;
 
-    // Midnight: keep a single Lifebloom target.
-    const maxLifeblooms = 1;
+    // Someone already has Lifebloom (non-tank) -- don't move it
+    const anyoneLB = heal.friends.All.find(f =>
+      f && !f.deadOrGhost && me.distanceTo(f) <= 40 && this.friendHasLifebloom(f)
+    );
+    if (anyoneLB) return null;
 
-    // If we're at max Lifeblooms, only refresh expiring ones (< 4 seconds)
-    if (currentLifeblooms >= maxLifeblooms) {
-      const expiringLifebloom = heal.friends.All.find(friend => {
-        if (!friend || friend.deadOrGhost || me.distanceTo(friend) > 40) return false;
-
-        const lifebloomAura = this.getLifebloomAura(friend);
-        if (!lifebloomAura) return false;
-
-        const remaining = lifebloomAura.remaining || 0;
-        return remaining !== null && remaining <= 4000; // 4 seconds
-      });
-
-      // Only return expiring Lifebloom if the target also needs healing
-      if (expiringLifebloom && expiringLifebloom.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct) {
-        return expiringLifebloom;
-      }
-
-      return null; // At max Lifeblooms and none expiring or needing heal
-    }
-
-    // We can cast new Lifeblooms - find lowest health friend who needs healing and doesn't have Lifebloom
+    // No Lifebloom active anywhere and no tank in range -- lowest HP non-tank
     const target = heal.friends.All
-      .filter(friend =>
-        friend && !friend.deadOrGhost &&
-        me.distanceTo(friend) <= 40 &&
-        friend.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct &&
-        !this.friendHasLifebloom(friend) // Don't overwrite our own Lifebloom
+      .filter(f =>
+        f && !f.deadOrGhost &&
+        me.distanceTo(f) <= 40 &&
+        f.effectiveHealthPercent <= Settings.LifebloomHealingHealthPct &&
+        !heal.friends.Tanks.includes(f)
       )
       .sort((a, b) => a.effectiveHealthPercent - b.effectiveHealthPercent)[0];
 
