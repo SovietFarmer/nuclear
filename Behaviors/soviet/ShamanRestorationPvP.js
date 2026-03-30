@@ -53,6 +53,7 @@ export class ShamanRestorationPvP extends Behavior {
         { type: "checkbox", uid: "RShamPvPUsePurge", text: "Use Greater Purge", default: false },
         { type: "checkbox", uid: "RShamPvPUseLightningLasso", text: "Use Lightning Lasso", default: false },
         { type: "checkbox", uid: "RShamPvPUseCapacitorTotem", text: "Use Capacitor Totem", default: true },
+        { type: "checkbox", uid: "RShamPvPUseSpiritwalkersGrace", text: "Auto Spiritwalker's Grace", default: false },
       ],
     },
   ];
@@ -76,8 +77,12 @@ export class ShamanRestorationPvP extends Behavior {
       ),
       spell.cast("Spiritwalker's Grace", on => me, ret =>
         !this.shouldProtectLassoChannel() &&
-        me.isMoving() && !me.hasAura(auras.spiritWalkersGrace) &&
-        this.isHealingNeeded() && !me.hasAuraByMe("Ghost Wolf")
+        Settings.RShamPvPUseSpiritwalkersGrace &&
+        spell.isSpellKnown("Spiritwalker's Grace") &&
+        me.isMoving() &&
+        !me.hasAura(auras.spiritWalkersGrace) &&
+        this.isHealingNeeded() &&
+        !me.hasAuraByMe("Ghost Wolf")
       ),
 
       common.waitForCastOrChannel(),
@@ -453,12 +458,25 @@ export class ShamanRestorationPvP extends Behavior {
   // ---------------------------------------------------------------------------
 
   getAllyNeedingRiptide() {
-    const candidates = heal.priorityList.filter(a =>
-      a && a.isPlayer() &&
+    // Riptide at arena gate exit: cast on allies missing your Riptide even when HP is full.
+    // heal.priorityList can be empty briefly at match start, so fall back to raw player-friends.
+    let list = heal.priorityList;
+    if (!list || list.length === 0) {
+      list = me.getPlayerFriends(40);
+    }
+
+    if (!list.some(u => u && u.guid.equals(me.guid))) {
+      list.push(me);
+    }
+
+    const candidates = list.filter(a =>
+      a &&
+      a.isPlayer() &&
       !a.hasAuraByMe(auras.riptide) &&
-      a.effectiveHealthPercent < Settings.RShamPvPRiptidePct &&
-      me.withinLineOfSight(a)
+      me.withinLineOfSight(a) &&
+      me.distanceTo(a) <= 40
     );
+
     if (candidates.length === 0) return null;
     return candidates.sort((a, b) => a.effectiveHealthPercent - b.effectiveHealthPercent)[0];
   }
@@ -545,6 +563,15 @@ export class ShamanRestorationPvP extends Behavior {
       allies.push(me);
     }
     return allies;
+  }
+
+  isTotemActive(totemName) {
+    if (!wow.GameUI.totemInfo) return false;
+    for (let i = 1; i <= 6; i++) {
+      const info = wow.GameUI.totemInfo[i];
+      if (info && info.name === totemName) return true;
+    }
+    return false;
   }
 
   noEnemiesWithinRange(range) {

@@ -342,20 +342,21 @@ export class WarriorFuryPvP extends Behavior {
   findIntimidatingShoutTarget() {
     const enemies = me.getEnemies();
 
-    const eligibleEnemies = enemies.filter(enemy =>
+    // Fear only healers in 8y, with NO disorient DR usage (stacks == 0).
+    // This mirrors "strangulate-style" healer-lock behavior without the noisy AoE-fear spam.
+    const eligible = enemies.filter(enemy =>
       enemy.isPlayer() &&
+      enemy.isHealer() &&
       me.distanceTo(enemy) <= 8 &&
-      drTracker.getDRStacks(enemy.guid, "disorient") < 2 &&
+      drTracker.getDRStacks(enemy.guid, "disorient") === 0 &&
       !pvpHelpers.hasImmunity(enemy) &&
       !enemy.isCCd()
     );
 
-    if (eligibleEnemies.length < 2) {
-      return null;
-    }
+    if (eligible.length === 0) return null;
 
-    const priorityTarget = eligibleEnemies.find(enemy => this.hasMajorCooldowns(enemy));
-    return priorityTarget || eligibleEnemies[0];
+    // Prefer healers with major CDs when multiple are available.
+    return eligible.find(enemy => this.hasMajorCooldowns(enemy)) || eligible[0];
   }
 
   findHealerForStunCC() {
