@@ -334,6 +334,7 @@ const ores = {
   523283: "vein",   // Refulgent Copper Seam
   523284: "vein",   // Lightfused Refulgent Copper
   523285: "vein",   // Primal Refulgent Copper
+  523286: "vein",   // Wild Refulgent Copper
   523287: "vein",   // Voidbound Refulgent Copper
 
   523288: "vein",   // Umbral Tin
