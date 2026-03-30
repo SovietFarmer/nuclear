@@ -22,7 +22,7 @@ const auras = {
   powerWordShield: 17,
   atonement: 194384,
   surgeOfLight: 114255,
-  voidShield: 1253593,
+  voidShield: 1253591,
   shadowMend: 1252217,
   powerInfusion: 10060,
   archangel: 81700,
