@@ -347,6 +347,7 @@ const ores = {
   523297: "vein",   // Rich Brilliant Silver
   523298: "vein",   // Brilliant Silver Seam
   523299: "vein",   // Primal Brilliant Silver
+  523303: "vein",   // Lightfused Brilliant Silver
   523301: "vein",   // Voidbound Brilliant Silver
 };
 
