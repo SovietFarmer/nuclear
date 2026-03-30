@@ -30,6 +30,7 @@ export class DeathKnightUnholy extends Behavior {
   name = "Death Knight (Unholy) PvP";
   context = BehaviorContext.Any; // PvP or PvE
   specialization = Specialization.DeathKnight.Unholy
+  _strangulateTarget = undefined;
 
   build() {
     return new bt.Selector(
@@ -49,20 +50,10 @@ export class DeathKnightUnholy extends Behavior {
       spell.cast("Huddle", ret => Pet.current &&
         Pet.current.hasAuraByMe(auras.darkTransformation) &&
         Spell.getTimeSinceLastCast("Dark Transformation") < 5000),
-      new bt.Sequence(
-        "Strangulate healer",
-        new bt.Action(() => {
-          if (!me.target || me.target.pctHealth >= 70) {
-            return bt.Status.Failure;
-          }
-          const t = this.strangulateTarget();
-          if (!t || !t.isHealer()) {
-            return bt.Status.Failure;
-          }
-          spell._currentTarget = t;
-          return bt.Status.Success;
-        }),
-        spell.castEx("Strangulate")
+      spell.cast(
+        "Strangulate",
+        on => (this._strangulateTarget = this.strangulateTarget()),
+        ret => me.target && me.target.pctHealth < 70 && this._strangulateTarget !== undefined
       ),
       spell.cast("Blinding Sleet", on => this.blindingSleetTarget(), ret => this.blindingSleetTarget() !== undefined),
       new bt.Decorator(
@@ -150,25 +141,17 @@ export class DeathKnightUnholy extends Behavior {
   }
 
   strangulateTarget() {
-    // Prefer a healer who is not our current kill target (when one exists), then fallback.
-    // Sort by distance so iteration order is stable (objMgr order is arbitrary).
-    const nearbyEnemies = me.getPlayerEnemies(20).sort((a, b) => me.distanceTo(a) - me.distanceTo(b));
-
-    const isValid = (unit) =>
-      unit.isHealer() &&
-      me.isFacing(unit) &&
-      me.withinLineOfSight(unit) &&
-      !unit.isCCd() &&
-      unit.canCC() &&
-      unit.getDR("silence") === 0;
+    // Get all enemy players within 20 yards and find the first valid healer target
+    const nearbyEnemies = me.getPlayerEnemies(20);
 
     for (const unit of nearbyEnemies) {
-      if (unit !== me.target && isValid(unit)) {
-        return unit;
-      }
-    }
-    for (const unit of nearbyEnemies) {
-      if (isValid(unit)) {
+      if (
+        unit.isHealer() &&
+        me.isFacing(unit) &&
+        !unit.isCCd() &&
+        unit.canCC() &&
+        unit.getDR("silence") === 0
+      ) {
         return unit;
       }
     }
