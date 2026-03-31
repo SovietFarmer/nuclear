@@ -250,7 +250,9 @@ export class PriestDiscipline extends Behavior {
 
   currentOrBestTarget() {
     const target = me.target;
-    if (target !== null && me.canAttack(target)) {
+    // Only use manual target if CombatTargeting already accepts it (party combat / pet / AttackOOC).
+    // Raw me.target + canAttack() pulls unrelated mobs the frame does not consider "in combat".
+    if (target !== null && me.canAttack(target) && combat.targets.includes(target)) {
       return target;
     }
     return combat.bestTarget;
@@ -350,8 +352,7 @@ export class PriestDiscipline extends Behavior {
   }
 
   findMassDispelTarget() {
-    const enemies = me.getEnemies();
-    for (const enemy of enemies) {
+    for (const enemy of combat.targets) {
       if (enemy.hasAura("Ice Block") || enemy.hasAura("Divine Shield")) {
         return enemy;
       }
@@ -360,9 +361,8 @@ export class PriestDiscipline extends Behavior {
   }
 
   findswpTarget() {
-    const enemies = me.getEnemies();
-    for (const enemy of enemies) {
-      if ((!this.hasShadowWordPain(enemy) || enemy.getAuraByMe(auras.shadowWordPain)?.remaining < 4000) && enemy.inCombatWithMe) {
+    for (const enemy of combat.targets) {
+      if (!this.hasShadowWordPain(enemy) || enemy.getAuraByMe(auras.shadowWordPain)?.remaining < 4000) {
         return enemy;
       }
     }
@@ -370,8 +370,7 @@ export class PriestDiscipline extends Behavior {
   }
 
   hasswpTarget() {
-    const enemies = me.getEnemies();
-    for (const enemy of enemies) {
+    for (const enemy of combat.targets) {
       if (this.hasShadowWordPain(enemy) && me.inCombatWith(enemy) && enemy.effectiveHealthPercent > 10) {
         return enemy;
       }
