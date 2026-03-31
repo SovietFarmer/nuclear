@@ -11,6 +11,7 @@ import { WoWDispelType } from "@/Enums/Auras";
 import Settings from "@/Core/Settings";
 
 const auras = {
+  improvedPurify: 390632, // talent — Purify removes Disease in addition to Magic
   painSuppression: 33206,
   powerWordFortitude: 21562,
   powerOfTheDarkSide: 198068,
@@ -106,7 +107,10 @@ export class PriestDiscipline extends Behavior {
       // DISPELS (Low priority in PVE)
       // =====================================================
       spell.dispel("Purify", true, DispelPriority.Low, false, WoWDispelType.Magic),
-      spell.dispel("Purify", true, DispelPriority.Low, false, WoWDispelType.Disease),
+      new bt.Decorator(
+        ret => spell.isSpellKnown(auras.improvedPurify),
+        spell.dispel("Purify", true, DispelPriority.Low, false, WoWDispelType.Disease)
+      ),
       spell.cast("Mass Dispel", on => this.findMassDispelTarget(), ret =>
         this.findMassDispelTarget() !== undefined),
 
