@@ -7,11 +7,9 @@ import Settings from '@/Core/Settings';
 import { me } from '@/Core/ObjectManager';
 import { defaultCombatTargeting as Combat } from '@/Targeting/CombatTargeting';
 import { PowerType } from '@/Enums/PowerType';
-import { DispelPriority } from '@/Data/Dispels';
+import { DispelPriority, dispels } from '@/Data/Dispels';
 import { WoWDispelType } from '@/Enums/Auras';
 import { pvpHelpers } from '@/Data/PVPData';
-import { RaceType } from '@/Enums/UnitEnums';
-
 const auras = {
   metamorphosis: 162264,
   immolationAura: 258920,
@@ -31,14 +29,14 @@ const auras = {
 };
 
 export class DemonhunterHavocPvP extends Behavior {
-  name = 'Havoc Demon Hunter PvP (Midnight)';
+  name = 'Havoc Demon Hunter PvP Fel-Scarred (Midnight)';
   context = BehaviorContext.Any;
   specialization = Specialization.DemonHunter.Havoc;
   version = wow.GameVersion.Retail;
 
   static settings = [
     {
-      header: 'Havoc PvP (Midnight)',
+      header: 'Havoc Fel-Scarred PvP (Midnight)',
       options: [
         { type: 'checkbox', uid: 'DHHavocUseDefensiveCooldown', text: 'Use Defensive Cooldowns', default: true },
         { type: 'slider', uid: 'DHHavocBlurThreshold', text: 'Blur HP Threshold', default: 65, min: 1, max: 100 },
@@ -88,19 +86,49 @@ export class DemonhunterHavocPvP extends Behavior {
     );
   }
 
-  isFelScarred() {
-    return spell.isSpellKnown("Sigil of Doom") || spell.isSpellKnown("Consuming Fire");
-  }
-
   offensiveDispels() {
     return new bt.Selector(
+      spell.cast("Arcane Torrent", on => me, ret =>
+        spell.isSpellKnown("Arcane Torrent") && this.hasOffensiveDispelTargetInMelee()),
       spell.dispel("Consume Magic", false, DispelPriority.Low, true, WoWDispelType.Magic),
     );
+  }
+
+  /** Same purge rules as spell.dispel (enemy magic buffs); true if a player we would purge is in melee range. */
+  hasOffensiveDispelTargetInMelee() {
+    if (Settings.DispelMode === "None") return false;
+    const priority = DispelPriority.Low;
+
+    for (const unit of Combat.targets) {
+      if (!unit.isPlayer()) continue;
+      if (!me.isWithinMeleeRange(unit) || !me.withinLineOfSight(unit)) continue;
+
+      for (const aura of unit.auras) {
+        const dispelTypeMatch = aura.dispelType === WoWDispelType.Magic;
+        const dispelPriority = dispels[aura.spellId] || DispelPriority.Low;
+        const isValidDispel = aura.isBuff() && dispelPriority >= priority;
+
+        if (isValidDispel && aura.remaining > 2000 && dispelTypeMatch) {
+          const durationPassed = aura.duration - aura.remaining;
+          let shouldDispel = false;
+          if (Settings.DispelMode === "Everything") {
+            shouldDispel = true;
+          } else if (Settings.DispelMode === "List") {
+            shouldDispel = dispels[aura.spellId] !== undefined;
+          }
+          if (shouldDispel && durationPassed > 777) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   defensiveCooldowns() {
     return new bt.Selector(
       spell.cast('Blur', on => me, ret =>
+        !me.hasAura(auras.blur) &&
         me.effectiveHealthPercent <= Settings.DHHavocBlurThreshold &&
         Settings.DHHavocUseDefensiveCooldown),
 
@@ -117,45 +145,9 @@ export class DemonhunterHavocPvP extends Behavior {
     return false;
   }
 
+  // Fel-Scarred burst: Immolation → The Hunt → Eye Beam → Annihilation/Death Sweep → Meta → Sigil → spenders → Consuming Fire / Abyssal Gaze
   burstCooldowns() {
     return new bt.Selector(
-      new bt.Decorator(
-        ret => this.isFelScarred(),
-        this.burstFelScarred()
-      ),
-      new bt.Decorator(
-        ret => !this.isFelScarred(),
-        this.burstAldrachi()
-      ),
-    );
-  }
-
-  // Aldrachi Reaver burst: The Hunt → Reaver's Glaive → Eye Beam → Annihilation/Death Sweep → Meta → extensions
-  burstAldrachi() {
-    return new bt.Selector(
-      this.useRacials(),
-      spell.cast("Immolation Aura", on => me),
-      spell.cast("The Hunt", on => me.target, ret => !me.isRooted()),
-      spell.cast("Throw Glaive", on => me.target, ret => me.hasAura(auras.reaversGlaive)),
-      spell.cast("Eye Beam", on => me.target, ret => me.isWithinMeleeRange(me.target)),
-      // Annihilation before Death Sweep for extra slashes (Focused Ire / Art of the Glaive interaction)
-      spell.cast("Annihilation", on => me.target, ret =>
-        me.hasAura(auras.metamorphosis) && me.isWithinMeleeRange(me.target)),
-      spell.cast("Death Sweep", on => me.target, ret =>
-        me.hasAura(auras.metamorphosis) && me.isWithinMeleeRange(me.target)),
-      // Meta after initial Eye Beam sequence — Chaotic Transformation resets Eye Beam + Death Sweep
-      spell.cast("Metamorphosis", on => me, ret => !me.hasAura(auras.metamorphosis)),
-      spell.cast("Felblade", on => me.target),
-      spell.cast("Blade Dance", on => me.target, ret => me.isWithinMeleeRange(me.target)),
-      spell.cast("Chaos Strike", on => me.target, ret =>
-        me.hasAura(auras.warbladesHunger) || this.getFury() >= 40),
-    );
-  }
-
-  // Fel-Scarred burst: The Hunt → Eye Beam → Annihilation/Death Sweep → Meta → Sigil of Doom → Abyssal Gaze
-  burstFelScarred() {
-    return new bt.Selector(
-      this.useRacials(),
       spell.cast("Immolation Aura", on => me),
       spell.cast("The Hunt", on => me.target, ret => !me.isRooted()),
       spell.cast("Eye Beam", on => me.target, ret =>
@@ -165,12 +157,12 @@ export class DemonhunterHavocPvP extends Behavior {
       spell.cast("Death Sweep", on => me.target, ret =>
         me.hasAura(auras.metamorphosis) && me.isWithinMeleeRange(me.target)),
       spell.cast("Metamorphosis", on => me, ret => !me.hasAura(auras.metamorphosis)),
-      // Fel-Scarred Meta abilities: Sigil of Doom procs Student of Suffering
-      spell.cast("Sigil of Doom", on => me.target, ret => me.hasAura(auras.metamorphosis)),
-      spell.cast("Consuming Fire", on => me, ret => me.hasAura(auras.metamorphosis)),
-      // Abyssal Gaze replaces Eye Beam during Meta — extends Meta duration
+      spell.cast("Sigil of Doom", on => me.target, ret =>
+        me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Sigil of Doom")),
+      spell.cast("Consuming Fire", on => me, ret =>
+        me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Consuming Fire")),
       spell.cast("Abyssal Gaze", on => me.target, ret =>
-        me.hasAura(auras.metamorphosis) && me.isWithinMeleeRange(me.target)),
+        me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Abyssal Gaze") && me.isWithinMeleeRange(me.target)),
       spell.cast("Felblade", on => me.target),
       spell.cast("Blade Dance", on => me.target, ret => me.isWithinMeleeRange(me.target)),
       spell.cast("Chaos Strike", on => me.target, ret => this.getFury() >= 40),
@@ -179,10 +171,6 @@ export class DemonhunterHavocPvP extends Behavior {
 
   sustainedDamage() {
     return new bt.Selector(
-      // Empowered Throw Glaive (Aldrachi Reaver's Glaive proc)
-      spell.cast("Throw Glaive", on => me.target, ret => me.hasAura(auras.reaversGlaive)),
-      // Sigil of Doom for Student of Suffering (Fel-Scarred only — fails silently on Aldrachi)
-      spell.cast("Sigil of Doom", on => me.target, ret => this.isFelScarred()),
       // Felblade gap-close when out of melee but within 15yd
       spell.cast("Felblade", on => me.target, ret =>
         !me.isWithinMeleeRange(me.target) && me.target.distanceTo(me) <= 15),
@@ -192,27 +180,40 @@ export class DemonhunterHavocPvP extends Behavior {
         new bt.Selector(
           spell.cast("Throw Glaive", on => me.target, ret => spell.getCharges("Throw Glaive") >= 2)
         )),
-      // Melee rotation
+      // Melee rotation (aligned with PvE Fel-Scarred: Unbound Chaos → Meta spenders → Eye Beam → extensions)
       new bt.Decorator(
         ret => me.isWithinMeleeRange(me.target) && me.isFacing(me.target),
         new bt.Selector(
-          // Vengeful Retreat before Eye Beam for Inertia setup (optional)
+          spell.cast("Felblade", on => me.target, ret => me.hasAura(auras.unboundChaos)),
+          spell.cast("Fel Rush", on => me, ret =>
+            Settings.DHHavocUseFelRush && me.hasAura(auras.unboundChaos)),
+          spell.cast("Death Sweep", on => me.target, ret =>
+            me.hasAura(auras.metamorphosis) && me.isWithinMeleeRange(me.target)),
+          spell.cast("Blade Dance", on => me.target, ret =>
+            me.hasAura(auras.metamorphosis) && me.isWithinMeleeRange(me.target)),
+          spell.cast("Immolation Aura", on => me, ret =>
+            Combat.targets.length >= 2 && spell.getCharges("Immolation Aura") >= 2),
           spell.cast("Vengeful Retreat", on => me, ret =>
             Settings.DHHavocUseVengefulRetreat &&
             spell.getCooldown("Eye Beam").ready &&
             !me.hasAura(auras.inertia)),
           spell.cast("Eye Beam", on => me.target),
-          // Death Sweep in Meta (Blade Dance override)
-          spell.cast("Death Sweep", on => me.target, ret => me.hasAura(auras.metamorphosis)),
-          spell.cast("Blade Dance", on => me.target),
-          // Annihilation in Meta (Chaos Strike override)
+          spell.cast("Essence Break", on => me.target, ret =>
+            me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Essence Break") && me.isWithinMeleeRange(me.target)),
+          spell.cast("Sigil of Doom", on => me.target, ret =>
+            me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Sigil of Doom")),
+          spell.cast("Consuming Fire", on => me, ret =>
+            me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Consuming Fire")),
+          spell.cast("Abyssal Gaze", on => me.target, ret =>
+            me.hasAura(auras.metamorphosis) && spell.isSpellKnown("Abyssal Gaze") && me.isWithinMeleeRange(me.target)),
+          spell.cast("Blade Dance", on => me.target, ret => me.isWithinMeleeRange(me.target)),
           spell.cast("Annihilation", on => me.target, ret => me.hasAura(auras.metamorphosis)),
+          spell.cast("Chaos Strike", on => me.target, ret => me.hasAura(auras.metamorphosis)),
           spell.cast("Chaos Strike", on => me.target, ret => this.getFury() >= 40),
-          // Felblade for fury generation + Army Unto Oneself uptime
           spell.cast("Felblade", on => me.target, ret => this.getFury() < 90),
           spell.cast("Immolation Aura", on => me),
-          // Fel Rush filler (optional)
-          spell.cast("Fel Rush", on => me, ret => Settings.DHHavocUseFelRush),
+          spell.cast("Fel Rush", on => me, ret =>
+            Settings.DHHavocUseFelRush && me.isWithinMeleeRange(me.target)),
           spell.cast("Throw Glaive", on => me.target),
         )),
     );
@@ -311,9 +312,4 @@ export class DemonhunterHavocPvP extends Behavior {
     return count;
   }
 
-  useRacials() {
-    return new bt.Selector(
-      spell.cast("Arcane Torrent", ret => me.race === RaceType.BloodElf && Combat.burstToggle),
-    );
-  }
 }
