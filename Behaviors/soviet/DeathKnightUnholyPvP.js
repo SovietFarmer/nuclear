@@ -7,6 +7,7 @@ import Specialization from "@/Enums/Specialization";
 import common from "@/Core/Common";
 import Pet from "@/Core/Pet";
 import Spell from "@/Core/Spell";
+import Settings from "@/Core/Settings";
 import { RaceType } from "@/Enums/UnitEnums";
 
 const auras = {
@@ -31,6 +32,23 @@ export class DeathKnightUnholy extends Behavior {
   context = BehaviorContext.Any; // PvP or PvE
   specialization = Specialization.DeathKnight.Unholy
   _strangulateTarget = undefined;
+
+  static settings = [
+    {
+      header: "Unholy DK PvP",
+      options: [
+        { type: "checkbox", uid: "DKUnholyPvPUseDeathPact", text: "Use Death Pact", default: true },
+        {
+          type: "slider",
+          uid: "DKUnholyPvPDeathPactHpPct",
+          text: "Death Pact HP % (use below)",
+          default: 40,
+          min: 1,
+          max: 100
+        },
+      ]
+    }
+  ];
 
   build() {
     return new bt.Selector(
@@ -64,6 +82,16 @@ export class DeathKnightUnholy extends Behavior {
           common.waitForNotSitting(),
           common.waitForNotMounted(),
           common.waitForCastOrChannel(),
+          spell.cast(
+            "Death Pact",
+            on => me,
+            ret =>
+              Settings.DKUnholyPvPUseDeathPact &&
+              spell.isSpellKnown("Death Pact") &&
+              !spell.isOnCooldown("Death Pact") &&
+              Pet.current &&
+              me.pctHealth < Settings.DKUnholyPvPDeathPactHpPct
+          ),
           spell.cast("Death Strike", ret => me.pctHealth < 95 && me.hasAura(auras.darkSuccor)),
           spell.cast("Death Strike", ret => me.pctHealth < 55 && (Spell.getTimeSinceLastCast("Death Strike") > 3000 || me.power > 50)),
           new bt.Decorator(
