@@ -12,8 +12,7 @@ Object.defineProperties(wow.CGActivePlayer.prototype, {
    */
   inArena: {
     value: function () {
-      const arenaAura = this.getAura(ARENA_PERIODIC_AURA);
-      return arenaAura !== undefined;
+      return this.hasAura(ARENA_PERIODIC_AURA);
     }
   },
 
@@ -25,8 +24,7 @@ Object.defineProperties(wow.CGActivePlayer.prototype, {
     value: function () {
       if (this.inArena()) {
         for (const auraId of ARENA_PREPARATION) {
-          const prepAura = this.getAura(auraId);
-          if (prepAura !== undefined) {
+          if (this.hasAura(auraId)) {
             return true;
           }
         }
