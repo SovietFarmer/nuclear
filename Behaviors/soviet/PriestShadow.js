@@ -24,7 +24,15 @@ export class PriestShadowVoidweaver extends Behavior {
   name = "Shadow Priest (Voidweaver) PVE";
   context = BehaviorContext.Any;
   specialization = Specialization.Priest.Shadow;
-  static settings = [];
+  static settings = [
+    {
+      header: "Trinkets (optional)",
+      options: [
+        { type: "checkbox", uid: "UseTrinket1", text: "Use trinket slot 1 during burst window", default: false },
+        { type: "checkbox", uid: "UseTrinket2", text: "Use trinket slot 2 during burst window", default: false },
+      ],
+    },
+  ];
 
   build() {
     return new bt.Selector(
@@ -93,11 +101,11 @@ export class PriestShadowVoidweaver extends Behavior {
   }
 
   useTrinkets() {
+    const trinketBurstOk = () =>
+      me.hasAura(auras.voidform) || me.hasAura(auras.powerInfusion) || me.hasAura(auras.entropicRift);
     return new bt.Selector(
-      common.useTrinkets(
-        () => undefined,
-        () => me.hasAura(auras.voidform) || me.hasAura(auras.powerInfusion) || me.hasAura(auras.entropicRift)
-      ),
+      common.useTrinket1(() => undefined, () => Settings.UseTrinket1 && trinketBurstOk()),
+      common.useTrinket2(() => undefined, () => Settings.UseTrinket2 && trinketBurstOk()),
     );
   }
 
