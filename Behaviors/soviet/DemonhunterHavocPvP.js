@@ -9,7 +9,9 @@ import { defaultCombatTargeting as Combat } from '@/Targeting/CombatTargeting';
 import { PowerType } from '@/Enums/PowerType';
 import { DispelPriority, dispels } from '@/Data/Dispels';
 import { WoWDispelType } from '@/Enums/Auras';
-import { pvpHelpers } from '@/Data/PVPData';
+import { pvpHelpers, pvpReverseMagicAllyAuraIds } from '@/Data/PVPData';
+const reverseMagicAllyRangeYds = 9;
+
 const auras = {
   metamorphosis: 162264,
   immolationAura: 258920,
@@ -75,6 +77,7 @@ export class DemonhunterHavocPvP extends Behavior {
           this.defensiveCooldowns(),
           common.waitForNotWaitingForArenaToStart(),
           common.waitForCombat(),
+          this.reverseMagicOnAllyHealer(),
           this.offensiveDispels(),
           new bt.Decorator(
             ret => this.hasCooldownsReady(),
@@ -84,6 +87,28 @@ export class DemonhunterHavocPvP extends Behavior {
         )
       )
     );
+  }
+
+  reverseMagicOnAllyHealer() {
+    return new bt.Selector(
+      spell.cast("Reverse Magic",
+        on => me,
+        ret => this.getAllyHealerForReverseMagic() !== undefined),
+    );
+  }
+
+  /** Friendly healer within 9yd, LOS, HoJ / Freezing Trap (pvpReverseMagicAllyAuraIds). Self-cast spell. */
+  getAllyHealerForReverseMagic() {
+    if (!spell.isSpellKnown("Reverse Magic")) return undefined;
+    const friends = me.getPlayerFriends(40);
+    for (const f of friends) {
+      if (f === me || !f.isHealer() || !me.withinLineOfSight(f)) continue;
+      if (f.distanceTo(me) > reverseMagicAllyRangeYds) continue;
+      if (pvpReverseMagicAllyAuraIds.some(id => f.hasAura(id))) {
+        return f;
+      }
+    }
+    return undefined;
   }
 
   offensiveDispels() {

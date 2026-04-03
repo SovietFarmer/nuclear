@@ -19,7 +19,7 @@ const auras = {
   powerWordShield: 17,
   atonement: 194384,
   surgeOfLight: 114255,
-  voidShield: 1253593,
+  voidShield: 1253591, // Master the Darkness — next PW:S becomes Void Shield
   shadowMend: 1252217,
 };
 
@@ -41,6 +41,14 @@ export class PriestDiscipline extends Behavior {
         { type: "slider", uid: "DiscEvangelismAtonements", text: "Min atonements for Evangelism", min: 2, max: 8, default: 3 },
         { type: "slider", uid: "DiscUltimatePenitenceAtonements", text: "Min atonements for Ultimate Penitence", min: 3, max: 10, default: 5 },
         { type: "slider", uid: "DiscRadianceLowAllies", text: "Min injured allies for Radiance", min: 2, max: 5, default: 3 },
+        {
+          type: "slider",
+          uid: "DiscEvangUltimatePenitenceStaggerSec",
+          text: "Min seconds between Evangelism & Ultimate Penitence",
+          min: 3,
+          max: 13,
+          default: 9,
+        },
       ]
     }
   ];
@@ -120,18 +128,15 @@ export class PriestDiscipline extends Behavior {
       spell.cast("Evangelism", on => me, ret =>
         me.inCombat() && !this.usedMajorHealCDRecently()
         && this.getAtonementCount() >= Settings.DiscEvangelismAtonements
-        && this.healTarget?.effectiveHealthPercent < Settings.DiscEvangelismHealth),
+        && this.healTarget?.effectiveHealthPercent < Settings.DiscEvangelismHealth
+        && this.canCastEvangelismVsUltimatePenitence()),
 
       spell.cast("Power Word: Radiance", on => me, ret => this.shouldCastRadiance()),
 
       // =====================================================
-      // CORE DAMAGE PRIORITY -- this IS the healing via Atonement
+      // CORE DAMAGE PRIORITY (Oracle) -- healing via Atonement
       // =====================================================
 
-      // Void Shield proc -- MUST use before next Penance or the proc is wasted
-      // Master the Darkness: 30% after Penance -> next PW:S becomes Void Shield
-      // Splashes to 2 nearby allies + applies Atonement to all 3 targets
-      // Cast by override name so it appears as "Void Shield" in logs
       spell.cast("Void Shield", on => this.getVoidShieldTarget(), ret =>
         me.hasAura(auras.voidShield) && this.getVoidShieldTarget() !== undefined),
 
@@ -140,20 +145,20 @@ export class PriestDiscipline extends Behavior {
         spell.getTimeSinceLastCast("Evangelism") < 8000
         && spell.getCharges("Power Word: Radiance") > 0),
 
-      // 1. Maintain SW:P (much stronger in Midnight, Penance spreads it)
       spell.cast("Shadow Word: Pain", on => this.currentOrBestTarget(), ret =>
         this.currentOrBestTarget() && !this.hasShadowWordPain(this.currentOrBestTarget())),
 
-      // 2. SW:D always on cooldown -- Expiation value is very high
       spell.cast("Shadow Word: Death", on => this.currentOrBestTarget(), ret =>
         this.currentOrBestTarget() && me.effectiveHealthPercent > 40),
 
-      // 3. Mind Blast (Voidweaver: creates Entropic Rift)
+      // Defensive Penance before Mind Blast (Oracle triage order)
+      spell.cast("Penance", on => this.healTarget, ret =>
+        !me.hasAura(auras.voidShield) && this.healTarget?.effectiveHealthPercent < 65),
+
       spell.cast("Mind Blast", on => this.currentOrBestTarget(), ret =>
         this.currentOrBestTarget() !== undefined),
 
-      // 4. Penance -- BLOCKED when Void Shield proc is active (must consume proc first)
-      // Voidweaver: Penance grows the Entropic Rift
+      // Offensive Penance (blocked when Void Shield proc is active — consume proc first)
       spell.cast("Penance", on => this.currentOrBestTarget(), ret =>
         !me.hasAura(auras.voidShield)
         && me.hasAura(auras.powerOfTheDarkSide) && this.currentOrBestTarget() !== undefined),
@@ -181,13 +186,10 @@ export class PriestDiscipline extends Behavior {
         && !me.hasAuraByMe("Rapture")
         && this.healTarget.effectiveHealthPercent < 85),
 
-      // Defensive Penance on hurt ally (blocked by Void Shield proc)
-      spell.cast("Penance", on => this.healTarget, ret =>
-        !me.hasAura(auras.voidShield) && this.healTarget?.effectiveHealthPercent < 65),
-
-      // Plea for atonement apply or refresh when expiring
+      // Plea: raid-style atonement touch-up; rarely used in Mythic+
       spell.cast("Plea", on => this.healTarget, ret =>
-        this.healTarget && this.healTarget.effectiveHealthPercent < 85
+        !me.inMythicPlus()
+        && this.healTarget && this.healTarget.effectiveHealthPercent < 85
         && !me.hasAuraByMe("Rapture")
         && (!this.hasAtonement(this.healTarget)
           || this.healTarget.getAuraByMe(auras.atonement)?.remaining < 4000)),
@@ -196,9 +198,10 @@ export class PriestDiscipline extends Behavior {
       // REMAINING DAMAGE -- fillers
       // =====================================================
 
-      // Ultimate Penitence / Power Word: Barrier (choice node -- only one talented)
+      // Ultimate Penitence — stagger from Evangelism for cooldown efficiency (Oracle)
       spell.cast("Ultimate Penitence", on => this.currentOrBestTarget(), ret =>
-        me.inCombat() && this.getAtonementCount() >= Settings.DiscUltimatePenitenceAtonements),
+        me.inCombat() && this.getAtonementCount() >= Settings.DiscUltimatePenitenceAtonements
+        && this.canCastUltimatePenitenceVsEvangelism()),
       spell.cast("Power Word: Barrier", on => this.healTarget, ret =>
         me.inCombat() && this.healTarget?.effectiveHealthPercent < 50),
 
@@ -210,10 +213,7 @@ export class PriestDiscipline extends Behavior {
       spell.cast("Power Word: Shield", on => this.findFriendWithoutShield(), ret =>
         this.findFriendWithoutShield() !== undefined),
 
-      // Void Blast filler (Voidweaver) -- override of Smite during Entropic Rift
-      spell.cast("Void Blast", on => this.currentOrBestTarget(), ret => this.isVoidweaver()),
-
-      // Smite filler (Oracle / Voidweaver fallback)
+      // Smite filler — always be casting through Atonement
       spell.cast("Smite", on => this.currentOrBestTarget(), ret =>
         this.currentOrBestTarget() !== undefined),
 
@@ -225,10 +225,8 @@ export class PriestDiscipline extends Behavior {
       spell.cast("Flash Heal", on => this.healTarget, ret =>
         this.healTarget?.effectiveHealthPercent < 55),
 
-      // Tank atonement maintenance in M+
+      // Tank atonement maintenance in M+ (Plea omitted — Radiance / PW:S / Flash in dungeons)
       spell.cast("Power Word: Shield", on => this.getTankNeedingAtonement(), req =>
-        this.shouldApplyAtonementToTank()),
-      spell.cast("Plea", on => this.getTankNeedingAtonement(), req =>
         this.shouldApplyAtonementToTank())
     );
   }
@@ -244,8 +242,17 @@ export class PriestDiscipline extends Behavior {
     });
   }
 
-  isVoidweaver() {
-    return spell.isSpellKnown("Void Blast");
+  evangUltimatePenitenceStaggerMs() {
+    return Math.max(0, Settings.DiscEvangUltimatePenitenceStaggerSec) * 1000;
+  }
+
+  /** Stagger so both CDs are not burned inside the same Atonement window (Atonement caps ~13s). */
+  canCastEvangelismVsUltimatePenitence() {
+    return spell.getTimeSinceLastCast("Ultimate Penitence") > this.evangUltimatePenitenceStaggerMs();
+  }
+
+  canCastUltimatePenitenceVsEvangelism() {
+    return spell.getTimeSinceLastCast("Evangelism") > this.evangUltimatePenitenceStaggerMs();
   }
 
   currentOrBestTarget() {
@@ -285,8 +292,17 @@ export class PriestDiscipline extends Behavior {
   }
 
   shouldCastRadiance() {
-    if (spell.getCharges("Power Word: Radiance") < 2) return false;
-    return this.getLowHealthAlliesCount(85) >= Settings.DiscRadianceLowAllies;
+    if (!me.inCombat()) return false;
+    const charges = spell.getCharges("Power Word: Radiance");
+    if (charges < 1) return false;
+    const needWork = this.getLowHealthAlliesCount(85) >= Settings.DiscRadianceLowAllies;
+    if (charges >= 2 && needWork) return true;
+    // Oracle: Radiance when Evangelism is unavailable (same triage need, single charge OK)
+    if (charges >= 1 && needWork) {
+      if (!spell.isSpellKnown("Evangelism")) return true;
+      return spell.isOnCooldown("Evangelism");
+    }
+    return false;
   }
 
   getLowHealthAlliesCount(healthThreshold) {

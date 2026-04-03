@@ -210,6 +210,15 @@ export const pvpInterrupts = {
   360806: { useKick: true, useCC: false, zone: "CC", name: "Sleep Walk" }
 };
 
+// Magic CC debuffs on allies — Reverse Magic (DH PvP) / similar tools (spell IDs; match PVPDRList)
+export const pvpReverseMagicAllyAuras = {
+  853: "Hammer of Justice",
+  3355: "Freezing Trap",
+  203337: "Freezing Trap (Honor talent)",
+};
+
+export const pvpReverseMagicAllyAuraIds = Object.keys(pvpReverseMagicAllyAuras).map(Number);
+
 // Immunity buffs that prevent damage/CC
 export const pvpImmunityBuffs = {
   373549: "Testing Immunity",
@@ -410,5 +419,7 @@ export default {
   pvpReflect,
   pvpInterrupts,
   pvpImmunityBuffs,
+  pvpReverseMagicAllyAuras,
+  pvpReverseMagicAllyAuraIds,
   helpers: pvpHelpers
 };
