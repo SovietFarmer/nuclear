@@ -257,12 +257,11 @@ export class PriestDiscipline extends Behavior {
 
   currentOrBestTarget() {
     const target = me.target;
-    // Only use manual target if CombatTargeting already accepts it (party combat / pet / AttackOOC).
-    // Raw me.target + canAttack() pulls unrelated mobs the frame does not consider "in combat".
-    if (target !== null && me.canAttack(target) && combat.targets.includes(target)) {
+    if (target !== null && common.validTarget(target) && combat.targets.includes(target)) {
       return target;
     }
-    return combat.bestTarget;
+    const best = combat.bestTarget;
+    return common.validTarget(best) ? best : null;
   }
 
   usedMajorHealCDRecently() {
