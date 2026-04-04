@@ -32,6 +32,10 @@ const auras = {
 const MIN_ATONEMENTS_FOR_EVANGELISM = 2;
 /** Only do proactive Atonement spreading when team is stable. */
 const SAFE_ATONEMENT_SPREAD_HP = 70;
+/** Do not spend a GCD on offensive SW:P while allies are below this HP. */
+const OFFENSIVE_SWP_HEALING_LOCK_HP = 90;
+/** Skip Fear briefly after fresh SW:P on an enemy priest. */
+const SWP_TO_FEAR_LOCKOUT_MS = 2500;
 
 export class PriestDisciplinePvP extends Behavior {
   name = "Priest (Discipline) PVP";
@@ -660,14 +664,19 @@ export class PriestDisciplinePvP extends Behavior {
 
       // DoT kill target early — main Oracle healing once Atonement is out
       spell.cast("Shadow Word: Pain", on => this.findShadowWordPainTarget(), ret =>
-        this.getAtonementCount() >= 1 && this.findShadowWordPainTarget() !== undefined),
+        this.getAtonementCount() >= 1 &&
+        !this.shouldHoldShadowWordPainForHealing() &&
+        this.findShadowWordPainTarget() !== undefined),
 
       spell.cast("Flash Heal", on => this.healTarget, ret =>
         this.healTarget?.effectiveHealthPercent < 88
         && me.hasAura(auras.surgeOfLight)
         && !this.shouldHoldFlashForShield(this.healTarget)),
       spell.dispel("Purify", true, DispelPriority.High, true, WoWDispelType.Magic),
-      spell.dispel("Dispel Magic", false, DispelPriority.High, true, WoWDispelType.Magic),
+      new bt.Decorator(
+        () => !this.shouldPauseOffensiveDispelsForHealing(),
+        spell.dispel("Dispel Magic", false, DispelPriority.High, true, WoWDispelType.Magic)
+      ),
 
       // Keep Penance ahead of casted triage heals.
       spell.cast("Penance", on => this.healTarget, ret => this.shouldDefensivePenance(this.healTarget)),
@@ -681,7 +690,10 @@ export class PriestDisciplinePvP extends Behavior {
         && !this.isLowMana()
         && !this.shouldHoldFlashForShield(this.healTarget)),
       spell.dispel("Purify", true, DispelPriority.Medium, true, WoWDispelType.Magic),
-      spell.dispel("Dispel Magic", false, DispelPriority.Medium, true, WoWDispelType.Magic),
+      new bt.Decorator(
+        () => !this.shouldPauseOffensiveDispelsForHealing(),
+        spell.dispel("Dispel Magic", false, DispelPriority.Medium, true, WoWDispelType.Magic)
+      ),
       this.noFacingSpells()
     );
   }
@@ -1030,7 +1042,22 @@ export class PriestDisciplinePvP extends Behavior {
    * Unlike Pain Suppression (see shouldUsePainSuppression), Fade has no stun bypass — you cannot Fade while stunned.
    */
   canAttemptFadeCast() {
-    return !(!me || me.isUnableToCast());
+    if (!me || me.isUnableToCast()) {
+      return false;
+    }
+    // Never break our own Penance channel for utility Fade.
+    if (this.isChannelingPenanceLikeSpell()) {
+      return false;
+    }
+    return true;
+  }
+
+  isChannelingPenanceLikeSpell() {
+    if (!me || !me.isCastingOrChanneling) {
+      return false;
+    }
+    const current = me.currentChannel || me.currentCast;
+    return current === 47540 || current === 421453 || current === 400169;
   }
 
   shouldUseVoidShift(target) {
@@ -1164,6 +1191,9 @@ export class PriestDisciplinePvP extends Behavior {
     if (!me.inCombat()) {
       return undefined;
     }
+    if (this.shouldHoldShadowWordPainForHealing()) {
+      return undefined;
+    }
 
     // Shadow Word: Pain doesn't require facing but needs LOS
     // Prioritize current target if it doesn't have SW:P and isn't immune
@@ -1190,11 +1220,55 @@ export class PriestDisciplinePvP extends Behavior {
     return undefined;
   }
 
+  shouldHoldShadowWordPainForHealing() {
+    const ht = this.healTarget;
+    if (ht && this.isNotDeadAndInLineOfSight(ht) && ht.effectiveHealthPercent < OFFENSIVE_SWP_HEALING_LOCK_HP) {
+      return true;
+    }
+
+    const friends = me.getPlayerFriends(40);
+    for (const friend of friends) {
+      if (!this.isNotDeadAndInLineOfSight(friend)) {
+        continue;
+      }
+      if (friend.effectiveHealthPercent < OFFENSIVE_SWP_HEALING_LOCK_HP) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  shouldPauseOffensiveDispelsForHealing() {
+    const ht = this.healTarget;
+    if (ht && this.isNotDeadAndInLineOfSight(ht) &&
+      (ht.effectiveHealthPercent < 90 || ht.timeToDeath() < 4.5)) {
+      return true;
+    }
+
+    for (const friend of me.getPlayerFriends(40)) {
+      if (!this.isNotDeadAndInLineOfSight(friend)) {
+        continue;
+      }
+      if (friend.effectiveHealthPercent < 80 || friend.timeToDeath() < 4) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   psychicScreamTarget() {
     // Psychic Scream (Fear) doesn't require facing but needs LOS
     const enemies = me.getPlayerEnemies(8);
 
     for (const unit of enemies) {
+      const justAppliedPainToPriest =
+        unit.klass === KlassType.Priest &&
+        this.hasShadowWordPain(unit) &&
+        spell.getTimeSinceLastCast("Shadow Word: Pain") < SWP_TO_FEAR_LOCKOUT_MS;
+      if (justAppliedPainToPriest) {
+        continue;
+      }
+
       if (unit.isHealer() &&
         me.withinLineOfSight(unit) &&
         this.canCCTarget(unit) &&
