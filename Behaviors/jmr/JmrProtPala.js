@@ -50,7 +50,7 @@ export class JMRPROTECTIONPALA extends Behavior {
           common.waitForNotMounted(),
           common.waitForNotSitting(),
           common.waitForCastOrChannel(),
-          spell.cast("Devotion Aura", on => me, req => !me.hasAura(auras.devotionAura)),
+          spell.cast("Devotion Aura", on => me, req => !me.hasVisibleAura(auras.devotionAura)),
           spell.cast("Intercession",
             on => {
               const mouseoverGuid = wow.GameUI.mouseOverGuid;
