@@ -58,7 +58,9 @@ export class DruidRestorationPvP extends Behavior {
       header: "Restoration Druid PvP",
       options: [
         { type: "slider", uid: "RDruidPvPBarkskinPct", text: "Barkskin HP %", default: 55, min: 20, max: 90 },
-        { type: "slider", uid: "RDruidPvPBearPct", text: "Bear Form HP %", default: 40, min: 10, max: 70 },
+        { type: "checkbox", uid: "RDruidPvPUseBearForm", text: "Auto Bear Form (low HP)", default: false },
+        { type: "slider", uid: "RDruidPvPBearPct", text: "Auto Bear Form: HP %", default: 40, min: 10, max: 70 },
+        { type: "checkbox", uid: "RDruidPvPUseFrenziedRegen", text: "Frenzied Regeneration (only when already in Bear)", default: true },
         { type: "slider", uid: "RDruidPvPEmergencyPct", text: "Emergency healing (primary) HP %", default: 52, min: 25, max: 80 },
         { type: "slider", uid: "RDruidPvPTranqPct", text: "Tranquility average team HP % cap", default: 58, min: 30, max: 85 },
         { type: "slider", uid: "RDruidPvPIronbarkPct", text: "Ironbark HP %", default: 62, min: 30, max: 85 },
@@ -158,11 +160,13 @@ export class DruidRestorationPvP extends Behavior {
   defensiveCooldowns() {
     return new bt.Selector(
       spell.cast("Bear Form", ret =>
+        Settings.RDruidPvPUseBearForm &&
         me.effectiveHealthPercent <= Settings.RDruidPvPBearPct &&
         me.inCombat() &&
         !me.hasAura(auras.bearForm)
       ),
       spell.cast("Frenzied Regeneration", ret =>
+        Settings.RDruidPvPUseFrenziedRegen &&
         me.hasAura(auras.bearForm) &&
         me.effectiveHealthPercent < 78 &&
         spell.isSpellKnown("Frenzied Regeneration") &&
